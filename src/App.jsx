@@ -1,4 +1,5 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import Masonry from 'react-masonry-css';
 import './App.css';
 
 function App() {
@@ -10,6 +11,9 @@ function App() {
   const [afterId, setAfterId] = useState(null);
   const [hasMore, setHasMore] = useState(true);
   const loadingRef = useRef(null);
+  const [playingVideos, setPlayingVideos] = useState(new Set());
+  const [clickedVideos, setClickedVideos] = useState(new Set());
+  const videoRefs = useRef({});
 
   // Fetch available subreddits on component mount
   useEffect(() => {
@@ -98,6 +102,53 @@ function App() {
     setSelectedSubreddit(event.target.value);
   };
 
+  const handleVideoMouseEnter = (videoId) => {
+    if (!clickedVideos.has(videoId)) {
+      setPlayingVideos(prev => new Set([...prev, videoId]));
+      videoRefs.current[videoId]?.play().catch(err => console.warn('Playback failed:', err));
+    }
+  };
+
+  const handleVideoMouseLeave = (videoId) => {
+    if (!clickedVideos.has(videoId)) {
+      setPlayingVideos(prev => {
+        const next = new Set([...prev]);
+        next.delete(videoId);
+        return next;
+      });
+      videoRefs.current[videoId]?.pause();
+    }
+  };
+
+  const handleVideoClick = (videoId) => {
+    if (clickedVideos.has(videoId)) {
+      // If already clicked, remove from clicked set and pause
+      setClickedVideos(prev => {
+        const next = new Set([...prev]);
+        next.delete(videoId);
+        return next;
+      });
+      videoRefs.current[videoId]?.pause();
+    } else {
+      // If not clicked, add to clicked set and play
+      setClickedVideos(prev => new Set([...prev, videoId]));
+      videoRefs.current[videoId]?.play().catch(err => console.warn('Playback failed:', err));
+    }
+  };
+
+  // Reset video states when changing subreddit
+  useEffect(() => {
+    setPlayingVideos(new Set());
+    setClickedVideos(new Set());
+  }, [selectedSubreddit]);
+
+  const breakpointColumns = {
+    default: 4,
+    1440: 3,
+    1100: 2,
+    700: 1
+  };
+
   return (
     <div className="container">
       <h1>Reddit Media Gallery</h1>
@@ -120,25 +171,36 @@ function App() {
         <p>No videos found in r/{selectedSubreddit}</p>
       )}
 
-      <div className="video-grid">
+      <Masonry
+        breakpointCols={breakpointColumns}
+        className="masonry-grid"
+        columnClassName="masonry-grid_column"
+      >
         {videos.map(vid => (
-          <div key={vid.id} className="card">
-            <h3>{vid.title}</h3>
+          <div 
+            key={vid.id} 
+            className="card"
+            onMouseEnter={() => handleVideoMouseEnter(vid.id)}
+            onMouseLeave={() => handleVideoMouseLeave(vid.id)}
+          >
             <video
+              ref={el => videoRefs.current[vid.id] = el}
               src={vid.url}
-              controls
               loop
               muted
               width="100%"
-              style={{ borderRadius: '10px' }}
+              preload="metadata"
+              style={{ borderRadius: '10px', cursor: 'pointer' }}
+              onClick={() => handleVideoClick(vid.id)}
               onError={() => console.warn(`Failed to load video: ${vid.url}`)}
             >
               <source src={vid.url} type="video/mp4" />
               Your browser does not support the video tag.
             </video>
+            <h3 className="video-title">{vid.title}</h3>
           </div>
         ))}
-      </div>
+      </Masonry>
 
       <div ref={loadingRef} className="loading-indicator">
         {isLoading && <p className="loading">Loading more videos...</p>}

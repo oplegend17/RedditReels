@@ -1,29 +1,91 @@
 #root {
-  max-width: 1280px;
+  max-width: 100%;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 1rem;
   text-align: center;
   }
 
 .container {
-  padding: 2rem;
-  font-family: sans-serif;
+  padding: 1rem;
+  font-family: 'Inter', sans-serif;
   background: #111;
   color: white;
+  max-width: 1800px;
+  margin: 0 auto;
 }
 
-.video-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.5rem;
-  margin-top: 1.5rem;
+.masonry-grid {
+  display: flex;
+  width: 100%;
+  margin-left: -16px; /* Compensate for column gap */
+}
+
+.masonry-grid_column {
+  padding-left: 16px; /* Column gap */
+  background-clip: padding-box;
 }
 
 .card {
-  background: #222;
+  background: #1a1a1a;
+  margin-bottom: 16px;
+  border-radius: 16px;
+  overflow: hidden;
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  position: relative;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 12px rgba(0, 0, 0, 0.2);
+}
+
+.card video {
+  width: 100%;
+  display: block;
+  border-radius: 16px 16px 0 0;
+  background: #000;
+  transition: transform 0.2s ease-in-out;
+}
+
+.card video:hover {
+  transform: scale(1.02);
+}
+
+/* Add a subtle play icon overlay that shows on hover */
+.card::before {
+  content: '▶';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 2rem;
+  color: white;
+  background: rgba(0, 0, 0, 0.5);
   padding: 1rem;
-  border-radius: 12px;
-  box-shadow: 0 0 10px #000;
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.card:hover::before {
+  opacity: 0.8;
+}
+
+/* Hide the play icon when video is playing */
+.card.playing::before {
+  display: none;
+}
+
+.video-title {
+  font-size: 0.95rem;
+  margin: 12px 16px;
+  text-align: left;
+  line-height: 1.4;
+  overflow-wrap: break-word;
+  color: #e0e0e0;
 }
 
 .subreddit-selector {
@@ -32,30 +94,33 @@
 }
 
 .subreddit-select {
-  padding: 0.5rem 1rem;
+  padding: 0.75rem 1.5rem;
   font-size: 1rem;
-  border-radius: 8px;
-  background: #2a2a2a;
+  border-radius: 12px;
+  background: #1a1a1a;
   color: white;
   border: 2px solid #333;
   min-width: 200px;
   cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 .subreddit-select:hover {
   border-color: #646cff;
+  background: #222;
 }
 
 .subreddit-select:focus {
   outline: none;
   border-color: #646cff;
-  box-shadow: 0 0 0 2px rgba(100, 108, 255, 0.2);
+  box-shadow: 0 0 0 3px rgba(100, 108, 255, 0.2);
 }
 
 .loading {
   text-align: center;
   color: #646cff;
   margin: 2rem 0;
+  font-weight: 500;
 }
 
 .loading-indicator {
@@ -69,7 +134,7 @@
   margin: 2rem 0;
   padding: 1rem;
   background: rgba(255, 107, 107, 0.1);
-  border-radius: 8px;
+  border-radius: 12px;
 }
 
 .no-more {
