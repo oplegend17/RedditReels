@@ -2,6 +2,43 @@ import { useEffect, useState, useRef } from 'react';
 import Masonry from 'react-masonry-css';
 import './App.css';
 
+function VideoModal({ video, onClose }) {
+  const videoRef = useRef(null);
+
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [onClose]);
+
+  useEffect(() => {
+    videoRef.current?.play();
+  }, []);
+
+  return (
+    <div className="video-modal-overlay" onClick={onClose}>
+      <div className="video-modal-content" onClick={e => e.stopPropagation()}>
+        <button className="close-button" onClick={onClose}>×</button>
+        <video
+          ref={videoRef}
+          src={video.url}
+          controls
+          autoPlay
+          loop
+          style={{ maxHeight: '90vh', maxWidth: '100%' }}
+        >
+          <source src={video.url} type="video/mp4" />
+        </video>
+        <h2 className="modal-title">{video.title}</h2>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [videos, setVideos] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -13,7 +50,9 @@ function App() {
   const loadingRef = useRef(null);
   const [playingVideos, setPlayingVideos] = useState(new Set());
   const [clickedVideos, setClickedVideos] = useState(new Set());
+  const [loadingVideos, setLoadingVideos] = useState(new Set());
   const videoRefs = useRef({});
+  const [selectedVideo, setSelectedVideo] = useState(null);
 
   // Fetch available subreddits on component mount
   useEffect(() => {
@@ -120,20 +159,20 @@ function App() {
     }
   };
 
-  const handleVideoClick = (videoId) => {
-    if (clickedVideos.has(videoId)) {
-      // If already clicked, remove from clicked set and pause
-      setClickedVideos(prev => {
-        const next = new Set([...prev]);
-        next.delete(videoId);
-        return next;
-      });
-      videoRefs.current[videoId]?.pause();
-    } else {
-      // If not clicked, add to clicked set and play
-      setClickedVideos(prev => new Set([...prev, videoId]));
-      videoRefs.current[videoId]?.play().catch(err => console.warn('Playback failed:', err));
-    }
+  const handleVideoClick = (video) => {
+    setSelectedVideo(video);
+  };
+
+  const handleVideoLoadStart = (videoId) => {
+    setLoadingVideos(prev => new Set([...prev, videoId]));
+  };
+
+  const handleVideoCanPlay = (videoId) => {
+    setLoadingVideos(prev => {
+      const next = new Set([...prev]);
+      next.delete(videoId);
+      return next;
+    });
   };
 
   // Reset video states when changing subreddit
@@ -179,10 +218,15 @@ function App() {
         {videos.map(vid => (
           <div 
             key={vid.id} 
-            className="card"
+            className={`card ${loadingVideos.has(vid.id) ? 'loading' : ''}`}
             onMouseEnter={() => handleVideoMouseEnter(vid.id)}
             onMouseLeave={() => handleVideoMouseLeave(vid.id)}
           >
+            {loadingVideos.has(vid.id) && (
+              <div className="video-loading-overlay">
+                <div className="loading-spinner"></div>
+              </div>
+            )}
             <video
               ref={el => videoRefs.current[vid.id] = el}
               src={vid.url}
@@ -191,8 +235,13 @@ function App() {
               width="100%"
               preload="metadata"
               style={{ borderRadius: '10px', cursor: 'pointer' }}
-              onClick={() => handleVideoClick(vid.id)}
-              onError={() => console.warn(`Failed to load video: ${vid.url}`)}
+              onClick={() => handleVideoClick(vid)}
+              onLoadStart={() => handleVideoLoadStart(vid.id)}
+              onCanPlay={() => handleVideoCanPlay(vid.id)}
+              onError={() => {
+                console.warn(`Failed to load video: ${vid.url}`);
+                handleVideoCanPlay(vid.id);
+              }}
             >
               <source src={vid.url} type="video/mp4" />
               Your browser does not support the video tag.
@@ -201,6 +250,13 @@ function App() {
           </div>
         ))}
       </Masonry>
+
+      {selectedVideo && (
+        <VideoModal
+          video={selectedVideo}
+          onClose={() => setSelectedVideo(null)}
+        />
+      )}
 
       <div ref={loadingRef} className="loading-indicator">
         {isLoading && <p className="loading">Loading more videos...</p>}
