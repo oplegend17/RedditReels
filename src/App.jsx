@@ -217,66 +217,103 @@ function App() {
 
   return (
     <div className="container">
-      <h1>Reddit Media Gallery</h1>
-      
-      <div className="subreddit-selector">
-        <select 
-          value={selectedSubreddit} 
-          onChange={handleSubredditChange}
-          className="subreddit-select"
-        >
-          <option value="">Select Subreddit</option>
-          {availableSubreddits.map(sub => (
-            <option key={sub} value={sub}>r/{sub}</option>
-          ))}
-        </select>
-      </div>
-
-      {error && <p className="error">{error}</p>}
-      {!error && videos.length === 0 && !isLoading && (
-        <p>No videos found in r/{selectedSubreddit}</p>
-      )}
-
-      <Masonry
-        breakpointCols={breakpointColumns}
-        className="masonry-grid"
-        columnClassName="masonry-grid_column"
-      >
-        {videos.map(vid => (
-          <div 
-            key={vid.id} 
-            className={`card ${loadingVideos.has(vid.id) ? 'loading' : ''}`}
-            onMouseEnter={() => handleVideoMouseEnter(vid.id)}
-            onMouseLeave={() => handleVideoMouseLeave(vid.id)}
-          >
-            {loadingVideos.has(vid.id) && (
-              <div className="video-loading-overlay">
-                <div className="loading-spinner"></div>
-              </div>
-            )}
-            <video
-              ref={el => videoRefs.current[vid.id] = el}
-              src={vid.url}
-              loop
-              muted
-              width="100%"
-              preload="metadata"
-              style={{ borderRadius: '10px', cursor: 'pointer' }}
-              onClick={() => handleVideoClick(vid)}
-              onLoadStart={() => handleVideoLoadStart(vid.id)}
-              onCanPlay={() => handleVideoCanPlay(vid.id)}
-              onError={() => {
-                console.warn(`Failed to load video: ${vid.url}`);
-                handleVideoCanPlay(vid.id);
-              }}
-            >
-              <source src={vid.url} type="video/mp4" />
-              Your browser does not support the video tag.
-            </video>
-            <h3 className="video-title">{vid.title}</h3>
+      <header className="app-header">
+        <div className="header-content">
+          <h1>Reddit Media Gallery</h1>
+          <div className="subreddit-selector">
+            <div className="select-wrapper">
+              <select 
+                value={selectedSubreddit} 
+                onChange={handleSubredditChange}
+                className="subreddit-select"
+              >
+                <option value="">Choose Subreddit</option>
+                {availableSubreddits.map(sub => (
+                  <option key={sub} value={sub}>r/{sub}</option>
+                ))}
+              </select>
+              <span className="select-icon">▼</span>
+            </div>
           </div>
-        ))}
-      </Masonry>
+        </div>
+      </header>
+
+      <main className="main-content">
+        {error && (
+          <div className="error-container">
+            <svg className="error-icon" viewBox="0 0 24 24" width="24" height="24">
+              <path fill="currentColor" d="M12 4c4.4 0 8 3.6 8 8s-3.6 8-8 8-8-3.6-8-8 3.6-8 8-8zm0-2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm1 13h-2v2h2v-2zm0-8h-2v6h2V7z"/>
+            </svg>
+            <p>{error}</p>
+          </div>
+        )}
+
+        {!error && videos.length === 0 && !isLoading && (
+          <div className="empty-state">
+            <svg className="empty-icon" viewBox="0 0 24 24" width="48" height="48">
+              <path fill="currentColor" d="M19 2H5C3.9 2 3 2.9 3 4v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 18H5V4h14v16zm-8-7V7l5 4-5 4z"/>
+            </svg>
+            <p>No videos found in r/{selectedSubreddit}</p>
+          </div>
+        )}
+
+        <Masonry
+          breakpointCols={breakpointColumns}
+          className="masonry-grid"
+          columnClassName="masonry-grid_column"
+        >
+          {videos.map(vid => (
+            <div 
+              key={vid.id} 
+              className={`card ${loadingVideos.has(vid.id) ? 'loading' : ''}`}
+              onMouseEnter={() => handleVideoMouseEnter(vid.id)}
+              onMouseLeave={() => handleVideoMouseLeave(vid.id)}
+            >
+              {loadingVideos.has(vid.id) && (
+                <div className="video-loading-overlay">
+                  <div className="loading-spinner"></div>
+                </div>
+              )}
+              <video
+                ref={el => videoRefs.current[vid.id] = el}
+                src={vid.url}
+                loop
+                muted
+                width="100%"
+                preload="metadata"
+                style={{ borderRadius: '10px', cursor: 'pointer' }}
+                onClick={() => handleVideoClick(vid)}
+                onLoadStart={() => handleVideoLoadStart(vid.id)}
+                onCanPlay={() => handleVideoCanPlay(vid.id)}
+                onError={() => {
+                  console.warn(`Failed to load video: ${vid.url}`);
+                  handleVideoCanPlay(vid.id);
+                }}
+              >
+                <source src={vid.url} type="video/mp4" />
+                Your browser does not support the video tag.
+              </video>
+              <h3 className="video-title">{vid.title}</h3>
+            </div>
+          ))}
+        </Masonry>
+
+        <div ref={loadingRef} className="loading-indicator">
+          {isLoading && (
+            <div className="loading-animation">
+              <div className="loading-dot"></div>
+              <div className="loading-dot"></div>
+              <div className="loading-dot"></div>
+            </div>
+          )}
+          {!hasMore && videos.length > 0 && (
+            <div className="end-message">
+              <span>You've reached the end</span>
+              <div className="end-line"></div>
+            </div>
+          )}
+        </div>
+      </main>
 
       {selectedVideo && (
         <VideoModal
@@ -284,13 +321,6 @@ function App() {
           onClose={() => setSelectedVideo(null)}
         />
       )}
-
-      <div ref={loadingRef} className="loading-indicator">
-        {isLoading && <p className="loading">Loading more videos...</p>}
-        {!hasMore && videos.length > 0 && (
-          <p className="no-more">No more videos to load</p>
-        )}
-      </div>
     </div>
   );
 }
