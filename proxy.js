@@ -10,7 +10,10 @@ const app = express();
 const PORT = 3001;
 
 // Enable CORS
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_URL,
+  credentials: true
+}));
 
 // Get available subreddits
 app.get('/api/subreddits', (req, res) => {

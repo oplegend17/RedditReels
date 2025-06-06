@@ -7,6 +7,8 @@ import UserProfile from './components/UserProfile';
 import Favorites from './components/Favorites';
 import './App.css';
 
+const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL;
+
 function VideoModal({ video, onClose }) {
   const videoRef = useRef(null);
 
@@ -94,7 +96,7 @@ function App() {
   useEffect(() => {
     const fetchSubreddits = async () => {
       try {
-        const response = await fetch('http://localhost:3001/api/subreddits');
+        const response = await fetch(`${BACKEND_API_URL}/api/subreddits`);
         const data = await response.json();
         setAvailableSubreddits(data.subreddits);
         setSelectedSubreddit(data.subreddits[0]); // Set first subreddit as default
@@ -105,7 +107,7 @@ function App() {
     };
 
     fetchSubreddits();
-  }, []);
+  }, [BACKEND_API_URL]);
   const fetchVideos = async (isNewSubreddit = false) => {
     if (!selectedSubreddit || (!isNewSubreddit && !hasMore)) return;
     
@@ -113,7 +115,7 @@ function App() {
       setIsLoading(true);
       setError(null);
       
-      const response = await fetch(`http://localhost:3001/api/reddit/${selectedSubreddit}${afterId && !isNewSubreddit ? `?after=${afterId}` : ''}`);
+      const response = await fetch(`${BACKEND_API_URL}/api/reddit/${selectedSubreddit}${afterId && !isNewSubreddit ? `?after=${afterId}` : ''}`);
       if (!response.ok) {
         throw new Error(`HTTP error! Status: ${response.status}`);
       }
