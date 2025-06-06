@@ -5,60 +5,105 @@ export default function UserProfile({ session }) {
   const [loading, setLoading] = useState(true);
   const [username, setUsername] = useState(null);
   const [avatarUrl, setAvatarUrl] = useState(null);
+  const [updating, setUpdating] = useState(false);
 
   useEffect(() => {
-    getProfile();
+    if (session?.user) {
+      getProfile();
+    }
   }, [session]);
-
   const getProfile = async () => {
     try {
       setLoading(true);
       const { user } = session;
 
-      const { data, error } = await supabase
+      // First try to get the existing profile
+      let { data, error: fetchError } = await supabase
         .from('profiles')
         .select('username, avatar_url')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
 
-      if (error) throw error;
+      if (fetchError) throw fetchError;
 
-      if (data) {
-        setUsername(data.username);
-        setAvatarUrl(data.avatar_url);
+      // If no profile exists, create one
+      if (!data) {
+        const defaultUsername = user.email.split('@')[0];
+        const { data: newProfile, error: insertError } = await supabase
+          .from('profiles')
+          .insert({
+            id: user.id,
+            username: defaultUsername,
+            avatar_url: null,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .select('username, avatar_url')
+          .single();
+
+        if (insertError) throw insertError;
+        data = newProfile;
       }
+
+      setUsername(data.username);
+      setAvatarUrl(data.avatar_url);
     } catch (error) {
       console.error('Error fetching profile:', error);
+      alert(error.message || 'Error loading user data!');
     } finally {
       setLoading(false);
     }
   };
-
   const updateProfile = async (e) => {
     e.preventDefault();
     
     try {
-      setLoading(true);
+      setUpdating(true);
       const { user } = session;
+
+      if (!username?.trim()) {
+        throw new Error('Username cannot be empty');
+      }
 
       const updates = {
         id: user.id,
-        username,
-        avatar_url: avatarUrl,
-        updated_at: new Date(),
+        username: username.trim(),
+        avatar_url: avatarUrl?.trim() || null,
+        updated_at: new Date().toISOString()
       };
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('profiles')
-        .upsert(updates);
+        .upsert(updates, {
+          returning: 'minimal',
+          onConflict: 'id'
+        });
 
-      if (error) throw error;
+      if (error) {
+        if (error.code === '23505') { // unique violation
+          throw new Error('Username already taken');
+        }
+        throw error;
+      }
+
+      alert('Profile updated successfully!');
     } catch (error) {
       console.error('Error updating profile:', error);
+      alert(error.message || 'Error updating the data!');
     } finally {
-      setLoading(false);
+      setUpdating(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="loading-animation">
+        <div className="loading-dot"></div>
+        <div className="loading-dot"></div>
+        <div className="loading-dot"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="profile-container">
@@ -104,15 +149,16 @@ export default function UserProfile({ session }) {
             type="url"
             value={avatarUrl || ''}
             onChange={(e) => setAvatarUrl(e.target.value)}
+            placeholder="https://example.com/avatar.jpg"
           />
         </div>
 
         <button
           type="submit"
           className="update-button"
-          disabled={loading}
+          disabled={updating}
         >
-          {loading ? 'Updating...' : 'Update Profile'}
+          {updating ? 'Updating...' : 'Update Profile'}
         </button>
       </form>
     </div>

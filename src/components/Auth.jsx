@@ -6,6 +6,7 @@ export default function Auth() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isSignUp, setIsSignUp] = useState(false)
+  const [username, setUsername] = useState('')
 
   const handleAuth = async (e) => {
     e.preventDefault()
@@ -14,13 +15,27 @@ export default function Auth() {
       setLoading(true)
       
       if (isSignUp) {
-        const { data, error } = await supabase.auth.signUp({
+        const { data: authData, error: authError } = await supabase.auth.signUp({
           email,
           password,
         })
-        if (error) throw error
+        if (authError) throw authError
+
+        // Create profile after successful signup
+        if (authData.user) {
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .insert([
+              {
+                id: authData.user.id,
+                username: username || email.split('@')[0],
+                avatar_url: null,
+              }
+            ])
+          if (profileError) throw profileError
+        }
       } else {
-        const { data, error } = await supabase.auth.signInWithPassword({
+        const { error } = await supabase.auth.signInWithPassword({
           email,
           password,
         })
@@ -45,6 +60,14 @@ export default function Auth() {
             onChange={(e) => setEmail(e.target.value)}
             required
           />
+          {isSignUp && (
+            <input
+              type="text"
+              placeholder="Username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
+          )}
           <input
             type="password"
             placeholder="Password"
