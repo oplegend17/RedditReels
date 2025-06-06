@@ -91,6 +91,9 @@ function App() {
   const [activeTab, setActiveTab] = useState('gallery');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { favorites, loading: favoritesLoading, addFavorite, removeFavorite, isFavorite } = useFavorites();
+  const [consentGiven, setConsentGiven] = useState(() => {
+    return localStorage.getItem('reddit-reels-consent') === 'true';
+  });
 
   // Fetch available subreddits on component mount
   useEffect(() => {
@@ -264,11 +267,54 @@ function App() {
     return <Auth />;
   }
 
+  if (!consentGiven) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(to bottom, #0f0f0f, #1a1a1a)',
+        color: '#fff',
+        padding: '2rem',
+        textAlign: 'center',
+      }}>
+        <h1 style={{ fontSize: '2rem', marginBottom: '1.5rem', background: 'linear-gradient(120deg, #646cff, #8f96ff)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Reddit Reels - Consent Required</h1>
+        <p style={{ fontSize: '1.1rem', marginBottom: '2rem', maxWidth: 500 }}>
+          This site contains user-generated video content from Reddit, which may include adult or sensitive material. By continuing, you confirm that you are at least 18 years old and consent to viewing such content.
+        </p>
+        <button
+          style={{
+            padding: '1rem 2rem',
+            borderRadius: 12,
+            background: '#646cff',
+            color: '#fff',
+            fontSize: '1.1rem',
+            border: 'none',
+            cursor: 'pointer',
+            fontWeight: 600,
+            marginBottom: '1rem',
+          }}
+          onClick={() => {
+            localStorage.setItem('reddit-reels-consent', 'true');
+            setConsentGiven(true);
+          }}
+        >
+          I am 18+ and consent
+        </button>
+        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.95rem' }}>
+          If you do not consent, please close this page.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="container">
       <header className="app-header">
         <div className="header-content">
-          <h1>Reddit Media Gallery</h1>
+          <h1>Reddit Reels</h1>
           <nav className="main-nav">
             <button 
               className={`nav-button ${activeTab === 'gallery' ? 'active' : ''}`}
