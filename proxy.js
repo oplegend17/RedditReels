@@ -3,29 +3,33 @@ import fetch from 'node-fetch';
 import cors from 'cors';
 import dotenv from 'dotenv';
 
-// Load environment variables
 dotenv.config();
 
 const app = express();
-const PORT =  process.env.PORT || 3001 ;
+const PORT = process.env.PORT || 3001;
 
-// Enable CORS
+// CORS setup (open during dev)
 app.use(cors({
-  origin: process.env.FRONTEND_URL,
-  credentials: true
+  origin: '*', // Change to process.env.FRONTEND_URL for prod
 }));
 
-// Get available subreddits
+// Health check
+app.get('/api/health', (req, res) => {
+  res.send('🟢 Reddit Proxy is up');
+});
+
+// Subreddits list
 app.get('/api/subreddits', (req, res) => {
   const subreddits = process.env.DEFAULT_SUBREDDITS.split(',');
   res.json({ subreddits });
 });
 
-// Get default subreddit content
+// Default subreddit route
 app.get('/api/reddit', async (req, res) => {
   try {
     const defaultSubreddit = process.env.DEFAULT_SUBREDDITS.split(',')[0];
     const url = `${process.env.REDDIT_BASE_URL}${defaultSubreddit}/hot.json?limit=${process.env.ITEMS_PER_PAGE || 30}`;
+    console.log(`🔎 Fetching default subreddit: ${url}`);
 
     const response = await fetch(url, {
       headers: { 'User-Agent': process.env.USER_AGENT },
@@ -38,16 +42,19 @@ app.get('/api/reddit', async (req, res) => {
     const data = await response.json();
     res.json(data);
   } catch (err) {
+    console.error('❌ Error fetching default subreddit:', err);
     res.status(500).json({ error: err.toString() });
   }
 });
 
-// Get specific subreddit content
+// Specific subreddit route
 app.get('/api/reddit/:subreddit', async (req, res) => {
-  try {    const subreddit = req.params.subreddit;
+  try {
+    const subreddit = req.params.subreddit;
     const after = req.query.after || '';
-    const limit = 50; // Increased limit for better pagination
+    const limit = 50;
     const url = `${process.env.REDDIT_BASE_URL}${subreddit}/hot.json?limit=${limit}&raw_json=1${after ? `&after=${after}` : ''}`;
+    console.log(`🔎 Fetching subreddit: ${url}`);
 
     const response = await fetch(url, {
       headers: { 'User-Agent': process.env.USER_AGENT },
@@ -60,6 +67,7 @@ app.get('/api/reddit/:subreddit', async (req, res) => {
     const data = await response.json();
     res.json(data);
   } catch (err) {
+    console.error('❌ Error fetching subreddit:', err);
     res.status(500).json({ error: err.toString() });
   }
 });
