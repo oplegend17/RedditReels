@@ -8,10 +8,20 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// CORS setup (open during dev)
+// CORS setup (allow multiple origins)
+const allowedOrigins = process.env.FRONTEND_URL.split(',').map(url => url.trim());
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL,
+    origin: function(origin, callback) {
+      // Allow requests with no origin (like mobile apps, curl, etc.)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      } else {
+        return callback(new Error('Not allowed by CORS'));
+      }
+    },
+    credentials: true
   })
 );
 
