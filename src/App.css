@@ -197,12 +197,65 @@
 
 .video-modal-content {
   position: relative;
+  display: flex;
+  gap: 20px;
   max-width: 95vw;
   max-height: 95vh;
   border-radius: 16px;
   overflow: hidden;
   background: #000;
   box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+  padding: 20px;
+}
+
+.video-controls-sidebar {
+  width: 300px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  backdrop-filter: blur(5px);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.modal-title {
+  color: white;
+  font-size: 1.2rem;
+  margin: 0;
+  line-height: 1.4;
+  overflow-wrap: break-word;
+}
+
+.download-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: #646cff;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.download-button:hover {
+  background: #747bff;
+  transform: translateY(-2px);
+}
+
+.download-button svg {
+  width: 20px;
+  height: 20px;
+}
+
+.modal-video {
+  max-height: 85vh;
+  border-radius: 12px;
+  background: #000;
 }
 
 .close-button {
@@ -222,7 +275,6 @@
   justify-content: center;
   z-index: 1;
   transition: all 0.2s ease;
-padding: 0 !important;
 }
 
 .close-button:hover {
@@ -231,21 +283,18 @@ padding: 0 !important;
   transform: scale(1.1);
 }
 
-.modal-title {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 20px;
-  background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
-  margin: 0;
-  color: white;
-  font-size: 1.1rem;
-  text-align: left;
-}
-
-.video-modal-content video {
-  display: block;
-  max-width: 100%;
-  border-radius: 16px;
+@media (max-width: 768px) {
+  .video-modal-content {
+    flex-direction: column;
+  }
+  
+  .video-controls-sidebar {
+    width: 100%;
+    order: 2;
+  }
+  
+  .modal-video {
+    order: 1;
+    max-height: 60vh;
+  }
 }

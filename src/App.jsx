@@ -19,21 +19,48 @@ function VideoModal({ video, onClose }) {
     videoRef.current?.play();
   }, []);
 
+  const handleDownload = async () => {
+    try {
+      const response = await fetch(video.url);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${video.title}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Download failed:', error);
+    }
+  };
+
   return (
     <div className="video-modal-overlay" onClick={onClose}>
       <div className="video-modal-content" onClick={e => e.stopPropagation()}>
         <button className="close-button" onClick={onClose}>×</button>
+        <div className="video-controls-sidebar">
+          <h2 className="modal-title">{video.title}</h2>
+          <button className="download-button" onClick={handleDownload}>
+            <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" strokeWidth="2" fill="none">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Download
+          </button>
+        </div>
         <video
           ref={videoRef}
           src={video.url}
           controls
           autoPlay
           loop
-          style={{ maxHeight: '90vh', maxWidth: '100%' }}
+          className="modal-video"
         >
           <source src={video.url} type="video/mp4" />
         </video>
-        <h2 className="modal-title">{video.title}</h2>
       </div>
     </div>
   );
