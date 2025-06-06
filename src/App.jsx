@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import './App.css';
 
 function App() {
@@ -7,6 +7,9 @@ function App() {
   const [error, setError] = useState(null);
   const [selectedSubreddit, setSelectedSubreddit] = useState('');
   const [availableSubreddits, setAvailableSubreddits] = useState([]);
+  const [afterId, setAfterId] = useState(null);
+  const [hasMore, setHasMore] = useState(true);
+  const loadingRef = useRef(null);
 
   // Fetch available subreddits on component mount
   useEffect(() => {
@@ -25,41 +28,71 @@ function App() {
     fetchSubreddits();
   }, []);
 
+  const fetchVideos = async (isNewSubreddit = false) => {
+    if (!selectedSubreddit) return;
+    
+    try {
+      setIsLoading(true);
+      const response = await fetch(`http://localhost:3001/api/reddit/${selectedSubreddit}${afterId && !isNewSubreddit ? `?after=${afterId}` : ''}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      const data = await response.json();
+
+      // Extract videos from posts
+      const vids = (data?.data?.children || [])
+        .map(post => post?.data)
+        .filter(p => 
+          (p?.is_video && p?.media?.reddit_video?.fallback_url) ||
+          (p?.preview?.reddit_video_preview?.fallback_url)
+        )
+        .map(p => ({
+          id: p.id,
+          title: p.title,
+          url: p?.media?.reddit_video?.fallback_url || p?.preview?.reddit_video_preview?.fallback_url,
+        }));
+
+      setAfterId(data.data.after);
+      setHasMore(!!data.data.after);
+      setVideos(prev => isNewSubreddit ? vids : [...prev, ...vids]);
+    } catch (err) {
+      console.error('Error fetching videos:', err);
+      setError('Failed to load videos. Please try again later.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchVideos = async () => {
-      if (!selectedSubreddit) return;
+    if (selectedSubreddit) {
+      setVideos([]);
+      setAfterId(null);
+      setHasMore(true);
+      fetchVideos(true);
+    }
+  }, [selectedSubreddit]);
 
-      try {
-        setIsLoading(true);
-        const response = await fetch(`http://localhost:3001/api/reddit/${selectedSubreddit}`);
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
+  // Intersection Observer setup
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting && hasMore && !isLoading) {
+          fetchVideos();
         }
-        const data = await response.json();
+      },
+      { threshold: 1.0 }
+    );
 
-        // Extract videos from posts
-        const vids = (data?.data?.children || [])
-          .map(post => post?.data)
-          .filter(p => 
-            (p?.is_video && p?.media?.reddit_video?.fallback_url) ||
-            (p?.preview?.reddit_video_preview?.fallback_url)
-          )
-          .map(p => ({
-            id: p.id,
-            title: p.title,
-            url: p?.media?.reddit_video?.fallback_url || p?.preview?.reddit_video_preview?.fallback_url,
-          }));
-        setVideos(vids);
-      } catch (err) {
-        console.error('Error fetching videos:', err);
-        setError('Failed to load videos. Please try again later.');
-      } finally {
-        setIsLoading(false);
+    if (loadingRef.current) {
+      observer.observe(loadingRef.current);
+    }
+
+    return () => {
+      if (loadingRef.current) {
+        observer.unobserve(loadingRef.current);
       }
     };
-
-    fetchVideos();
-  }, [selectedSubreddit]); // Fetch videos when selected subreddit changes
+  }, [hasMore, isLoading, afterId]);
 
   const handleSubredditChange = (event) => {
     setSelectedSubreddit(event.target.value);
@@ -82,9 +115,8 @@ function App() {
         </select>
       </div>
 
-      {isLoading && <p className="loading">Loading...</p>}
       {error && <p className="error">{error}</p>}
-      {!isLoading && !error && videos.length === 0 && (
+      {!error && videos.length === 0 && !isLoading && (
         <p>No videos found in r/{selectedSubreddit}</p>
       )}
 
@@ -106,6 +138,13 @@ function App() {
             </video>
           </div>
         ))}
+      </div>
+
+      <div ref={loadingRef} className="loading-indicator">
+        {isLoading && <p className="loading">Loading more videos...</p>}
+        {!hasMore && videos.length > 0 && (
+          <p className="no-more">No more videos to load</p>
+        )}
       </div>
     </div>
   );

@@ -58,6 +58,11 @@
   margin: 2rem 0;
 }
 
+.loading-indicator {
+  padding: 2rem 0;
+  text-align: center;
+}
+
 .error {
   color: #ff6b6b;
   text-align: center;
@@ -65,4 +70,11 @@
   padding: 1rem;
   background: rgba(255, 107, 107, 0.1);
   border-radius: 8px;
+}
+
+.no-more {
+  color: #888;
+  text-align: center;
+  margin: 2rem 0;
+  font-style: italic;
 }

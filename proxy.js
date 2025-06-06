@@ -43,7 +43,8 @@ app.get('/api/reddit', async (req, res) => {
 app.get('/api/reddit/:subreddit', async (req, res) => {
   try {
     const subreddit = req.params.subreddit;
-    const url = `${process.env.REDDIT_BASE_URL}${subreddit}/hot.json?limit=${process.env.ITEMS_PER_PAGE || 30}`;
+    const after = req.query.after || '';
+    const url = `${process.env.REDDIT_BASE_URL}${subreddit}/hot.json?limit=${process.env.ITEMS_PER_PAGE || 30}${after ? `&after=${after}` : ''}`;
 
     const response = await fetch(url, {
       headers: { 'User-Agent': process.env.USER_AGENT },
