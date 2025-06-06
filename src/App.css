@@ -418,6 +418,176 @@
   border-radius: 2px;
 }
 
+/* Auth styles */
+.auth-container {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(to bottom, #0f0f0f, #1a1a1a);
+  padding: 20px;
+}
+
+.auth-box {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2rem;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.auth-box h2 {
+  color: white;
+  margin-bottom: 2rem;
+  font-size: 1.8rem;
+  background: linear-gradient(120deg, #646cff, #8f96ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.auth-box form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.auth-box input {
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+}
+
+.auth-box input:focus {
+  outline: none;
+  border-color: #646cff;
+  box-shadow: 0 0 0 2px rgba(100, 108, 255, 0.2);
+}
+
+.auth-box button[type="submit"] {
+  padding: 12px;
+  border-radius: 8px;
+  border: none;
+  background: #646cff;
+  color: white;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.auth-box button[type="submit"]:hover {
+  background: #747bff;
+  transform: translateY(-1px);
+}
+
+.auth-box button[type="submit"]:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.toggle-auth {
+  margin-top: 1rem;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.toggle-auth:hover {
+  color: #646cff;
+}
+
+.sign-out-button {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-left: 1rem;
+}
+
+.sign-out-button:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: #646cff;
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.card-actions {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  display: flex;
+  gap: 8px;
+}
+
+.favorite-button {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  transition: all 0.2s ease;
+  opacity: 0;
+  transform: scale(0.8);
+}
+
+.card:hover .favorite-button {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.favorite-button:hover {
+  background: rgba(0, 0, 0, 0.8);
+  transform: scale(1.1);
+}
+
+.favorite-button svg {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+  transition: fill 0.2s ease;
+}
+
+.favorite-button.active {
+  opacity: 1;
+  color: #ff4757;
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.favorite-button.active svg {
+  animation: pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
 @media (max-width: 768px) {
   .video-modal-content {
     flex-direction: column;
