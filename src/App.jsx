@@ -87,6 +87,7 @@ function App() {
   const videoRefs = useRef({});
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [activeTab, setActiveTab] = useState('gallery');
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { favorites, loading: favoritesLoading, addFavorite, removeFavorite, isFavorite } = useFavorites();
 
   // Fetch available subreddits on component mount
@@ -292,6 +293,46 @@ function App() {
               Sign Out
             </button>
           </nav>
+          {/* Hamburger for mobile */}
+          <button
+            className={`hamburger${mobileNavOpen ? ' active' : ''}`}
+            aria-label="Open navigation menu"
+            onClick={() => setMobileNavOpen((open) => !open)}
+            style={{ background: 'none', border: 'none', padding: 0 }}
+          >
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+        </div>
+        {/* Mobile nav overlay */}
+        <div className={`mobile-nav${mobileNavOpen ? ' open' : ''}`}
+          onClick={() => setMobileNavOpen(false)}
+        >
+          <button 
+            className={`nav-button${activeTab === 'gallery' ? ' active' : ''}`}
+            onClick={e => { e.stopPropagation(); setActiveTab('gallery'); setMobileNavOpen(false); }}
+          >
+            Gallery
+          </button>
+          <button 
+            className={`nav-button${activeTab === 'favorites' ? ' active' : ''}`}
+            onClick={e => { e.stopPropagation(); setActiveTab('favorites'); setMobileNavOpen(false); }}
+          >
+            Favorites
+          </button>
+          <button 
+            className={`nav-button${activeTab === 'profile' ? ' active' : ''}`}
+            onClick={e => { e.stopPropagation(); setActiveTab('profile'); setMobileNavOpen(false); }}
+          >
+            Profile
+          </button>
+          <button 
+            className="sign-out-button"
+            onClick={e => { e.stopPropagation(); supabase.auth.signOut(); setMobileNavOpen(false); }}
+          >
+            Sign Out
+          </button>
         </div>
       </header>
 
