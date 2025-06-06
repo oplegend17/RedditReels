@@ -199,6 +199,11 @@
 .loading-indicator {
   padding: 2rem 0;
   text-align: center;
+  min-height: 100px;
+  margin-top: 1rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .error {
@@ -759,6 +764,12 @@
 .empty-state svg {
   margin-bottom: 1rem;
   opacity: 0.5;
+}
+
+.empty-message {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 1.1rem;
+  padding: 2rem;
 }
 
 @media (max-width: 768px) {

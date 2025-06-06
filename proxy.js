@@ -41,10 +41,10 @@ app.get('/api/reddit', async (req, res) => {
 
 // Get specific subreddit content
 app.get('/api/reddit/:subreddit', async (req, res) => {
-  try {
-    const subreddit = req.params.subreddit;
+  try {    const subreddit = req.params.subreddit;
     const after = req.query.after || '';
-    const url = `${process.env.REDDIT_BASE_URL}${subreddit}/hot.json?limit=${process.env.ITEMS_PER_PAGE || 30}${after ? `&after=${after}` : ''}`;
+    const limit = 50; // Increased limit for better pagination
+    const url = `${process.env.REDDIT_BASE_URL}${subreddit}/hot.json?limit=${limit}&raw_json=1${after ? `&after=${after}` : ''}`;
 
     const response = await fetch(url, {
       headers: { 'User-Agent': process.env.USER_AGENT },

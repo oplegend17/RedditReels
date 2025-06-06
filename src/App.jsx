@@ -105,12 +105,13 @@ function App() {
 
     fetchSubreddits();
   }, []);
-
   const fetchVideos = async (isNewSubreddit = false) => {
-    if (!selectedSubreddit) return;
+    if (!selectedSubreddit || (!isNewSubreddit && !hasMore)) return;
     
     try {
       setIsLoading(true);
+      setError(null);
+      
       const response = await fetch(`http://localhost:3001/api/reddit/${selectedSubreddit}${afterId && !isNewSubreddit ? `?after=${afterId}` : ''}`);
       if (!response.ok) {
         throw new Error(`HTTP error! Status: ${response.status}`);
@@ -128,10 +129,12 @@ function App() {
           id: p.id,
           title: p.title,
           url: p?.media?.reddit_video?.fallback_url || p?.preview?.reddit_video_preview?.fallback_url,
+          subreddit: selectedSubreddit
         }));
 
-      setAfterId(data.data.after);
-      setHasMore(!!data.data.after);
+      const newAfterId = data.data.after;
+      setAfterId(newAfterId);
+      setHasMore(!!newAfterId && vids.length > 0);
       setVideos(prev => isNewSubreddit ? vids : [...prev, ...vids]);
     } catch (err) {
       console.error('Error fetching videos:', err);
@@ -148,29 +151,32 @@ function App() {
       setHasMore(true);
       fetchVideos(true);
     }
-  }, [selectedSubreddit]);
-
-  // Intersection Observer setup
+  }, [selectedSubreddit]);  // Intersection Observer setup
   useEffect(() => {
+    let currentObserver = null;
     const observer = new IntersectionObserver(
-      entries => {
-        if (entries[0].isIntersecting && hasMore && !isLoading) {
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !isLoading && selectedSubreddit) {
           fetchVideos();
         }
       },
-      { threshold: 1.0 }
+      { 
+        threshold: 0.1,
+        rootMargin: '200px'
+      }
     );
 
     if (loadingRef.current) {
+      currentObserver = loadingRef.current;
       observer.observe(loadingRef.current);
     }
 
     return () => {
-      if (loadingRef.current) {
-        observer.unobserve(loadingRef.current);
+      if (currentObserver) {
+        observer.unobserve(currentObserver);
       }
     };
-  }, [hasMore, isLoading, afterId]);
+  }, [hasMore, isLoading, afterId, selectedSubreddit]);
 
   const handleSubredditChange = (event) => {
     setSelectedSubreddit(event.target.value);
@@ -370,19 +376,23 @@ function App() {
                 </div>
               ))}
             </Masonry>
-            
-            <div ref={loadingRef} className="loading-indicator">
-              {isLoading && (
+              <div ref={loadingRef} className="loading-indicator">
+              {isLoading && hasMore && (
                 <div className="loading-animation">
                   <div className="loading-dot"></div>
                   <div className="loading-dot"></div>
                   <div className="loading-dot"></div>
                 </div>
               )}
-              {!hasMore && videos.length > 0 && (
+              {(!hasMore && videos.length > 0) && (
                 <div className="end-message">
                   <span>You've reached the end</span>
                   <div className="end-line"></div>
+                </div>
+              )}
+              {(!isLoading && videos.length === 0) && (
+                <div className="empty-message">
+                  <span>No videos found</span>
                 </div>
               )}
             </div>
