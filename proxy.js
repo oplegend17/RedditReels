@@ -66,10 +66,11 @@ app.get('/api/reddit/:subreddit', async (req, res) => {
 
     const data = await response.json();
     res.json(data);
-  } catch (err) {
-    console.error('❌ Error fetching subreddit:', err);
-    res.status(500).json({ error: err.toString() });
-  }
+  }  catch (err) {
+  console.error('❌ Error fetching subreddit:', subreddit);
+  console.error('❌ Error details:', err);
+  res.status(500).json({ error: err.message || err.toString() });
+}
 });
 
 app.listen(PORT, () => {
