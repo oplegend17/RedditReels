@@ -11,7 +11,7 @@ const PORT = process.env.PORT || 3001;
 // CORS setup (open during dev)
 app.use(
   cors({
-    origin: "*", // Change to process.env.FRONTEND_URL for prod
+    origin: process.env.FRONTEND_URL,
   })
 );
 
@@ -30,9 +30,7 @@ app.get("/api/subreddits", (req, res) => {
 app.get("/api/reddit", async (req, res) => {
   try {
     const defaultSubreddit = process.env.DEFAULT_SUBREDDITS.split(",")[0];
-    const url = `${
-      process.env.REDDIT_BASE_URL
-    }${defaultSubreddit}/hot.json?limit=${process.env.ITEMS_PER_PAGE || 30}`;
+    const url = `${process.env.REDDIT_BASE_URL}${defaultSubreddit}/hot.json?limit=${process.env.ITEMS_PER_PAGE || 30}`;
     console.log(`🔎 Fetching default subreddit: ${url}`);
 
     const response = await fetch(url, {
@@ -57,11 +55,7 @@ app.get("/api/reddit/:subreddit", async (req, res) => {
     const subreddit = req.params.subreddit;
     const after = req.query.after || "";
     const limit = 50;
-    const url = `${
-      process.env.REDDIT_BASE_URL
-    }${subreddit}/hot.json?limit=${limit}&raw_json=1${
-      after ? `&after=${after}` : ""
-    }`;
+    const url = `${process.env.REDDIT_BASE_URL}${subreddit}/hot.json?limit=${limit}&raw_json=1${after ? `&after=${after}` : ""}`;
     console.log(`🔎 Fetching subreddit: ${url}`);
 
     const response = await fetch(url, {
@@ -74,7 +68,7 @@ app.get("/api/reddit/:subreddit", async (req, res) => {
 
     const data = await response.json();
     res.json(data);
-  }  catch (err) {
+  } catch (err) {
     console.error(`Error fetching subreddit: ${req.params.subreddit}`);
     console.error(err);
     res.status(500).json({ error: err.message || err.toString() });
