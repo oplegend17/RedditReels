@@ -135,6 +135,7 @@ function App() {
           id: p.id,
           title: p.title,
           url: p?.media?.reddit_video?.fallback_url || p?.preview?.reddit_video_preview?.fallback_url,
+          thumbnail: p?.preview?.images?.[0]?.source?.url?.replace(/&amp;/g, '&') || '',
           subreddit: selectedSubreddit
         }));
 
@@ -442,25 +443,33 @@ function App() {
                       </svg>
                     </button>
                   </div>
-                  <video
-                    ref={el => videoRefs.current[vid.id] = el}
-                    src={vid.url}
-                    loop
-                    muted
-                    width="100%"
-                    preload="metadata"
-                    style={{ borderRadius: '10px', cursor: 'pointer' }}
-                    onClick={() => handleVideoClick(vid)}
-                    onLoadStart={() => handleVideoLoadStart(vid.id)}
-                    onCanPlay={() => handleVideoCanPlay(vid.id)}
-                    onError={() => {
-                      console.warn(`Failed to load video: ${vid.url}`);
-                      handleVideoCanPlay(vid.id);
-                    }}
-                  >
-                    <source src={vid.url} type="video/mp4" />
-                    Your browser does not support the video tag.
-                  </video>
+                  <div className="video-container" style={{ position: 'relative', width: '100%' }}>
+                    <img
+                      src={vid.thumbnail}
+                      alt={vid.title}
+                      style={{ 
+                        width: '100%', 
+                        height: '100%',
+                        borderRadius: '10px',
+                        cursor: 'pointer',
+                        objectFit: 'cover'
+                      }}
+                      onClick={() => handleVideoClick(vid)}
+                    />
+                    <div className="play-overlay" 
+                      style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        color: 'white',
+                        fontSize: '48px',
+                        opacity: '0.8'
+                      }}
+                    >
+                      ▶
+                    </div>
+                  </div>
                   <h3 className="video-title">{vid.title}</h3>
                 </div>
               ))}
