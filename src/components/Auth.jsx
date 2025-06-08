@@ -21,19 +21,7 @@ export default function Auth() {
         })
         if (authError) throw authError
 
-        // Create profile after successful signup
-        if (authData.user) {
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .insert([
-              {
-                id: authData.user.id,
-                username: username || email.split('@')[0],
-                avatar_url: null,
-              }
-            ])
-          if (profileError) throw profileError
-        }
+        // Removed: Profile creation logic will now be handled by UserProfile.jsx
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,
