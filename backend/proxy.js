@@ -138,15 +138,26 @@ app.get("/api/reels/random", async (req, res) => {
     if (!defaultSubs.length) {
       return res.status(400).json({ error: "No default subreddits configured" });
     }
+    // Randomly pick 2-3 subreddits
+    const numSubs = Math.min(3, defaultSubs.length);
+    const pickedSubs = [];
+    const used = new Set();
+    while (pickedSubs.length < numSubs) {
+      const idx = Math.floor(Math.random() * defaultSubs.length);
+      if (!used.has(idx)) {
+        pickedSubs.push(defaultSubs[idx]);
+        used.add(idx);
+      }
+    }
     const token = await getRedditAccessToken();
-    const limitPerSub = 2; // Fetch 2 from each, then shuffle
-    let allVideos = [];
-    for (const sub of defaultSubs) {
+    const limitPerSub = 2;
+    // Fetch in parallel
+    const fetches = pickedSubs.map(async (sub) => {
       const url = `https://oauth.reddit.com/r/${sub}/hot.json?limit=${limitPerSub}&raw_json=1`;
       const response = await fetch(url, { headers: buildHeaders(token) });
-      if (!response.ok) continue;
+      if (!response.ok) return [];
       const data = await response.json();
-      const vids = (data?.data?.children || [])
+      return (data?.data?.children || [])
         .map(post => post?.data)
         .filter(p => (p?.is_video && p?.media?.reddit_video?.fallback_url) || (p?.preview?.reddit_video_preview?.fallback_url))
         .map(p => ({
@@ -156,8 +167,8 @@ app.get("/api/reels/random", async (req, res) => {
           thumbnail: p?.preview?.images?.[0]?.source?.url?.replace(/&amp;/g, '&') || '',
           subreddit: sub
         }));
-      allVideos = allVideos.concat(vids);
-    }
+    });
+    let allVideos = (await Promise.all(fetches)).flat();
     // Shuffle and limit
     for (let i = allVideos.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
