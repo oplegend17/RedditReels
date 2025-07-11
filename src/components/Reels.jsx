@@ -12,14 +12,11 @@ function shuffle(array) {
   return arr;
 }
 
+// Replace HeartIcon with Material-style favorite button
 const HeartIcon = ({ liked, onClick, animate, tooltip }) => (
-  <div
-    style={{
-      position: 'relative',
-      display: 'inline-block',
-    }}
-  >
+  <div style={{ position: 'relative', display: 'inline-block' }}>
     <button
+      className={`favorite-button${liked ? ' liked' : ''}`}
       onClick={onClick}
       style={{
         background: liked
@@ -30,38 +27,32 @@ const HeartIcon = ({ liked, onClick, animate, tooltip }) => (
         boxShadow: liked
           ? '0 0 16px 4px #ff2f56cc, 0 2px 8px #0006'
           : '0 2px 8px #0006',
-        width: 72,
-        height: 72,
+        width: 50,
+        height: 50,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         cursor: 'pointer',
-        transition: 'box-shadow 0.2s, background 0.2s',
+        transition: 'box-shadow 0.2s, background 0.2s, transform 0.18s',
         outline: 'none',
         position: 'relative',
         zIndex: 10,
-        backdropFilter: 'blur(8px)',
-        WebkitBackdropFilter: 'blur(8px)',
+        backdropFilter: 'blur(2px)',
+        WebkitBackdropFilter: 'blur(2px)',
+        transform: animate ? 'scale(1.18)' : 'scale(1)',
       }}
       aria-label={liked ? 'Unlike' : 'Like'}
       tabIndex={0}
       onMouseDown={e => e.stopPropagation()}
       onTouchStart={e => e.stopPropagation()}
     >
-      <svg
-        width="44" height="44" viewBox="0 0 48 48"
-        style={{
-          filter: liked ? 'drop-shadow(0 0 12px #ff6b6b)' : 'none',
-          transition: 'filter 0.2s, transform 0.2s',
-          transform: animate ? 'scale(1.25)' : 'scale(1)',
-          fill: liked ? '#ff2f56' : 'none',
-          stroke: liked ? '#ff2f56' : '#fff',
-          strokeWidth: 3,
-          strokeLinecap: 'round',
-          strokeLinejoin: 'round',
-        }}
-      >
-        <path d="M34.5 8c-3.5 0-6.5 2.5-8.5 5.5C24 10.5 21 8 17.5 8 12.5 8 9 12.5 9 17.5c0 8.5 15 20.5 15 20.5s15-12 15-20.5C39 12.5 35.5 8 34.5 8z" />
+      <svg viewBox="0 0 24 24" width="44" height="44">
+        <path
+          fill={liked ? '#ff2f56' : 'none'}
+          stroke={liked ? '#ff2f56' : '#fff'}
+          strokeWidth="2"
+          d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+        />
       </svg>
       {/* Tooltip */}
       <span
