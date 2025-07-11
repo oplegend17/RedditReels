@@ -12,24 +12,84 @@ function shuffle(array) {
   return arr;
 }
 
-const HeartIcon = ({ liked, onClick, animate }) => (
-  <svg
-    onClick={onClick}
-    width="64" height="64" viewBox="0 0 48 48"
+const HeartIcon = ({ liked, onClick, animate, tooltip }) => (
+  <div
     style={{
-      cursor: 'pointer',
-      filter: liked ? 'drop-shadow(0 0 12px #ff6b6b)' : 'none',
-      transition: 'filter 0.2s, transform 0.2s',
-      transform: animate ? 'scale(1.2)' : 'scale(1)',
-      fill: liked ? '#ff2f56' : 'none',
-      stroke: '#fff',
-      strokeWidth: 3,
-      strokeLinecap: 'round',
-      strokeLinejoin: 'round',
+      position: 'relative',
+      display: 'inline-block',
     }}
   >
-    <path d="M34.5 8c-3.5 0-6.5 2.5-8.5 5.5C24 10.5 21 8 17.5 8 12.5 8 9 12.5 9 17.5c0 8.5 15 20.5 15 20.5s15-12 15-20.5C39 12.5 35.5 8 34.5 8z" />
-  </svg>
+    <button
+      onClick={onClick}
+      style={{
+        background: liked
+          ? 'rgba(255,47,86,0.18)'
+          : 'rgba(30,30,30,0.18)',
+        border: 'none',
+        borderRadius: '50%',
+        boxShadow: liked
+          ? '0 0 16px 4px #ff2f56cc, 0 2px 8px #0006'
+          : '0 2px 8px #0006',
+        width: 72,
+        height: 72,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        transition: 'box-shadow 0.2s, background 0.2s',
+        outline: 'none',
+        position: 'relative',
+        zIndex: 10,
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
+      }}
+      aria-label={liked ? 'Unlike' : 'Like'}
+      tabIndex={0}
+      onMouseDown={e => e.stopPropagation()}
+      onTouchStart={e => e.stopPropagation()}
+    >
+      <svg
+        width="44" height="44" viewBox="0 0 48 48"
+        style={{
+          filter: liked ? 'drop-shadow(0 0 12px #ff6b6b)' : 'none',
+          transition: 'filter 0.2s, transform 0.2s',
+          transform: animate ? 'scale(1.25)' : 'scale(1)',
+          fill: liked ? '#ff2f56' : 'none',
+          stroke: liked ? '#ff2f56' : '#fff',
+          strokeWidth: 3,
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+        }}
+      >
+        <path d="M34.5 8c-3.5 0-6.5 2.5-8.5 5.5C24 10.5 21 8 17.5 8 12.5 8 9 12.5 9 17.5c0 8.5 15 20.5 15 20.5s15-12 15-20.5C39 12.5 35.5 8 34.5 8z" />
+      </svg>
+      {/* Tooltip */}
+      <span
+        style={{
+          visibility: tooltip ? 'visible' : 'hidden',
+          opacity: tooltip ? 1 : 0,
+          background: 'rgba(30,30,30,0.85)',
+          color: '#fff',
+          textAlign: 'center',
+          borderRadius: 8,
+          padding: '6px 14px',
+          position: 'absolute',
+          zIndex: 20,
+          bottom: 80,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          fontSize: 15,
+          fontWeight: 500,
+          pointerEvents: 'none',
+          transition: 'opacity 0.18s',
+          boxShadow: '0 2px 8px #0005',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {liked ? 'Unlike' : 'Like'}
+      </span>
+    </button>
+  </div>
 );
 
 export default function Reels({ availableSubreddits }) {
@@ -48,6 +108,7 @@ export default function Reels({ availableSubreddits }) {
   const [heartAnimate, setHeartAnimate] = useState(false);
   const [showHint, setShowHint] = useState(true);
   const [fadeIn, setFadeIn] = useState(true);
+  const [showTooltip, setShowTooltip] = useState(false);
 
   // Helper to fetch random reels
   const fetchRandomReels = async () => {
@@ -233,6 +294,10 @@ export default function Reels({ availableSubreddits }) {
     setTimeout(() => setFadeIn(true), 10);
   }, [currentIndex]);
 
+  // Tooltip for like button
+  const handleHeartMouseEnter = () => setShowTooltip(true);
+  const handleHeartMouseLeave = () => setShowTooltip(false);
+
   if (loading) return <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading Reels...</div>;
   if (error) return <div style={{ color: 'red' }}>{error}</div>;
   if (!videos.length) return <div>No reels found.</div>;
@@ -240,33 +305,57 @@ export default function Reels({ availableSubreddits }) {
   const video = videos[currentIndex];
   const isSeen = seen.has(video.id);
 
+  // Progress bar width
+  const progress = ((currentIndex + 1) / videos.length) * 100;
+
   return (
     <div
       style={{
+        position: 'fixed',
+        top: 64, // below navbar
+        left: 0,
         width: '100vw',
-        minHeight: '100vh',
+        height: 'calc(100vh - 64px)',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
         background: '#000',
-        position: 'relative',
         overflow: 'hidden',
-        touchAction: 'none',
         fontFamily: 'Inter, system-ui, sans-serif',
+        zIndex: 100,
       }}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
     >
+      {/* Blurred background for glass effect */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100%',
+          zIndex: 0,
+          background: `url(${video.url}) center center / cover no-repeat`,
+          filter: 'blur(32px) brightness(0.5) saturate(1.2)',
+          opacity: 0.45,
+          pointerEvents: 'none',
+          transition: 'background 0.5s',
+        }}
+      />
       {/* Gradient overlays */}
       <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: 80, zIndex: 2, pointerEvents: 'none', background: 'linear-gradient(to bottom, rgba(0,0,0,0.7), transparent)' }} />
       <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: 120, zIndex: 2, pointerEvents: 'none', background: 'linear-gradient(to top, rgba(0,0,0,0.8), transparent)' }} />
+      {/* Progress bar */}
+      <div style={{ position: 'absolute', top: 0, left: 0, width: `${progress}%`, height: 6, background: 'linear-gradient(90deg, #ff2f56 40%, #646cff 100%)', borderRadius: 8, zIndex: 10, boxShadow: '0 2px 8px #0004', transition: 'width 0.4s cubic-bezier(.4,2,.6,1)' }} />
       {/* Swipe/scroll hint */}
       {showHint && (
-        <div style={{ position: 'absolute', bottom: 40, left: '50%', transform: 'translateX(-50%)', color: '#fff', background: 'rgba(0,0,0,0.5)', borderRadius: 16, padding: '0.5rem 1.5rem', fontSize: 18, zIndex: 10, opacity: 0.85 }}>
-          Swipe or scroll for more
+        <div style={{ position: 'absolute', bottom: 40, left: '50%', transform: 'translateX(-50%)', color: '#fff', background: 'rgba(0,0,0,0.55)', borderRadius: 18, padding: '0.7rem 2.2rem', fontSize: 20, zIndex: 10, opacity: 0.92, boxShadow: '0 2px 12px #0007', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 8, opacity: 0.8 }}><path d="M12 5v14M19 12l-7 7-7-7" /></svg>
+          <span>Swipe or scroll for more</span>
         </div>
       )}
       <div
@@ -281,8 +370,25 @@ export default function Reels({ availableSubreddits }) {
           justifyContent: 'center',
           transition: 'transform 0.3s cubic-bezier(.4,2,.6,1)',
           transform: transitioning ? 'scale(0.97)' : 'scale(1)',
+          zIndex: 3,
         }}
       >
+        {/* Glassmorphic card */}
+        <div
+          style={{
+            position: 'absolute',
+            width: '100%',
+            height: '80vh',
+            borderRadius: 32,
+            background: 'rgba(30,30,30,0.38)',
+            boxShadow: '0 12px 48px 0 rgba(0,0,0,0.55)',
+            backdropFilter: 'blur(16px) saturate(1.2)',
+            WebkitBackdropFilter: 'blur(16px) saturate(1.2)',
+            zIndex: 1,
+            top: 0,
+            left: 0,
+          }}
+        />
         <video
           ref={videoRef}
           src={video.url}
@@ -293,25 +399,38 @@ export default function Reels({ availableSubreddits }) {
           style={{
             width: '100%',
             height: '80vh',
-            borderRadius: 28,
+            borderRadius: 32,
             background: '#111',
             objectFit: 'cover',
             boxShadow: '0 12px 48px rgba(0,0,0,0.55)',
-            transition: 'box-shadow 0.3s',
             opacity: fadeIn ? 1 : 0,
             transitionProperty: 'box-shadow, opacity',
             transitionDuration: '0.3s, 0.5s',
+            zIndex: 2,
           }}
         />
-        <div style={{ position: 'absolute', top: 36, right: 36, zIndex: 3 }}>
-          <HeartIcon liked={isFavorite(video.id)} onClick={() => handleLike(video)} animate={heartAnimate} />
+        <div
+          style={{
+            position: 'absolute',
+            top: 36,
+            right: 36,
+            zIndex: 4,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 10,
+          }}
+          onMouseEnter={handleHeartMouseEnter}
+          onMouseLeave={handleHeartMouseLeave}
+        >
+          <HeartIcon liked={isFavorite(video.id)} onClick={() => handleLike(video)} animate={heartAnimate} tooltip={showTooltip} />
         </div>
-        <div style={{ position: 'absolute', bottom: 36, left: 36, color: '#fff', background: 'rgba(0,0,0,0.45)', borderRadius: 14, padding: '0.85rem 1.5rem', maxWidth: '80%', fontFamily: 'inherit', zIndex: 3 }}>
+        <div style={{ position: 'absolute', bottom: 36, left: 36, color: '#fff', background: 'rgba(0,0,0,0.45)', borderRadius: 14, padding: '0.85rem 1.5rem', maxWidth: '80%', fontFamily: 'inherit', zIndex: 4, boxShadow: '0 2px 8px #0005' }}>
           <div style={{ fontWeight: 800, fontSize: '1.25rem', textShadow: '0 2px 8px #000' }}>{video.title}</div>
           <div style={{ fontSize: '1.05rem', opacity: 0.88, marginTop: 2 }}>r/{video.subreddit}</div>
         </div>
       </div>
-      <div style={{ color: '#fff', marginTop: 18, fontSize: 17, opacity: 0.8, fontFamily: 'inherit', letterSpacing: 1 }}>
+      <div style={{ color: '#fff', marginTop: 18, fontSize: 17, opacity: 0.8, fontFamily: 'inherit', letterSpacing: 1, zIndex: 5 }}>
         {currentIndex + 1} / {videos.length} {isSeen && <span style={{ color: '#aaa', fontSize: 14 }}>(seen)</span>}
       </div>
     </div>
