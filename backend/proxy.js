@@ -129,6 +129,48 @@ app.get("/api/reddit/:subreddit", async (req, res) => {
   }
 });
 
+// Random reels endpoint
+app.get("/api/reels/random", async (req, res) => {
+  try {
+    const defaultSubs = process.env.DEFAULT_SUBREDDITS
+      ? process.env.DEFAULT_SUBREDDITS.split(",").map((s) => s.trim())
+      : [];
+    if (!defaultSubs.length) {
+      return res.status(400).json({ error: "No default subreddits configured" });
+    }
+    const token = await getRedditAccessToken();
+    const limitPerSub = 2; // Fetch 2 from each, then shuffle
+    let allVideos = [];
+    for (const sub of defaultSubs) {
+      const url = `https://oauth.reddit.com/r/${sub}/hot.json?limit=${limitPerSub}&raw_json=1`;
+      const response = await fetch(url, { headers: buildHeaders(token) });
+      if (!response.ok) continue;
+      const data = await response.json();
+      const vids = (data?.data?.children || [])
+        .map(post => post?.data)
+        .filter(p => (p?.is_video && p?.media?.reddit_video?.fallback_url) || (p?.preview?.reddit_video_preview?.fallback_url))
+        .map(p => ({
+          id: p.id,
+          title: p.title,
+          url: p?.media?.reddit_video?.fallback_url || p?.preview?.reddit_video_preview?.fallback_url,
+          thumbnail: p?.preview?.images?.[0]?.source?.url?.replace(/&amp;/g, '&') || '',
+          subreddit: sub
+        }));
+      allVideos = allVideos.concat(vids);
+    }
+    // Shuffle and limit
+    for (let i = allVideos.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [allVideos[i], allVideos[j]] = [allVideos[j], allVideos[i]];
+    }
+    const result = allVideos.slice(0, 5);
+    res.json({ reels: result });
+  } catch (err) {
+    console.error("❌ Error fetching random reels:", err);
+    res.status(500).json({ error: err.toString() });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`✅ Proxy server running at http://localhost:${PORT}`);
 });

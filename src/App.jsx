@@ -5,6 +5,7 @@ import { useFavorites } from './lib/useFavorites';
 import Auth from './components/Auth';
 import UserProfile from './components/UserProfile';
 import Favorites from './components/Favorites';
+import Reels from './components/Reels';
 import './App.css';
 
 const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL;
@@ -324,6 +325,12 @@ function App() {
               Gallery
             </button>
             <button 
+              className={`nav-button ${activeTab === 'reels' ? 'active' : ''}`}
+              onClick={() => setActiveTab('reels')}
+            >
+              Reels
+            </button>
+            <button 
               className={`nav-button ${activeTab === 'favorites' ? 'active' : ''}`}
               onClick={() => setActiveTab('favorites')}
             >
@@ -363,6 +370,12 @@ function App() {
             onClick={e => { e.stopPropagation(); setActiveTab('gallery'); setMobileNavOpen(false); }}
           >
             Gallery
+          </button>
+          <button 
+            className={`nav-button${activeTab === 'reels' ? ' active' : ''}`}
+            onClick={e => { e.stopPropagation(); setActiveTab('reels'); setMobileNavOpen(false); }}
+          >
+            Reels
           </button>
           <button 
             className={`nav-button${activeTab === 'favorites' ? ' active' : ''}`}
@@ -495,6 +508,10 @@ function App() {
               )}
             </div>
           </>
+        )}
+
+        {activeTab === 'reels' && (
+          <Reels availableSubreddits={availableSubreddits} />
         )}
 
         {activeTab === 'favorites' && (
