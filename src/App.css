@@ -121,8 +121,15 @@
 }
 
 .subreddit-selector {
-  margin: 1rem 0 2rem;
+  position: sticky;
+  top: 64px; /* height of .app-header */
+  z-index: 99;
+  background: rgba(17, 17, 17, 0.98);
+  box-shadow: 0 2px 12px 0 rgba(0,0,0,0.10);
+  margin: 0 0 2rem 0;
+  padding: 1rem 0 1rem 0;
   text-align: center;
+  transition: box-shadow 0.2s;
 }
 
 .select-wrapper {
@@ -843,6 +850,10 @@
   }
   .masonry-grid_column {
     padding-left: 0;
+  }
+  .subreddit-selector {
+    top: 56px;
+    padding: 0.5rem 0 0.5rem 0;
   }
 }
 

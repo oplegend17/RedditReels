@@ -95,6 +95,9 @@ function App() {
   const [consentGiven, setConsentGiven] = useState(() => {
     return localStorage.getItem('reddit-reels-consent') === 'true';
   });
+  const [showUnder10MB, setShowUnder10MB] = useState(false);
+  const [videoSizes, setVideoSizes] = useState({}); // { [videoId]: sizeInBytes }
+  const [fetchingSizes, setFetchingSizes] = useState(false);
 
   // Fetch available subreddits on component mount
   useEffect(() => {
@@ -186,6 +189,34 @@ function App() {
     };
   }, [hasMore, isLoading, afterId, selectedSubreddit]);
 
+  useEffect(() => {
+    // Fetch sizes for all videos if the filter is enabled and sizes are missing (only in gallery tab)
+    if (activeTab === 'gallery' && showUnder10MB && videos.length > 0) {
+      const missing = videos.filter(v => videoSizes[v.id] === undefined);
+      if (missing.length > 0) {
+        setFetchingSizes(true);
+        Promise.all(
+          missing.map(async (v) => {
+            try {
+              const res = await fetch(v.url, { method: 'HEAD' });
+              const size = res.headers.get('Content-Length');
+              return { id: v.id, size: size ? parseInt(size, 10) : null };
+            } catch {
+              return { id: v.id, size: null };
+            }
+          })
+        ).then(results => {
+          setVideoSizes(prev => {
+            const next = { ...prev };
+            results.forEach(({ id, size }) => { next[id] = size; });
+            return next;
+          });
+          setFetchingSizes(false);
+        });
+      }
+    }
+  }, [showUnder10MB, videos, activeTab]);
+
   const handleSubredditChange = (event) => {
     setSelectedSubreddit(event.target.value);
   };
@@ -232,6 +263,23 @@ function App() {
         ...video,
         subreddit: selectedSubreddit
       });
+    }
+  };
+
+  const handleDownload = async (video) => {
+    try {
+      const response = await fetch(video.url);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${video.title}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Download failed:', error);
     }
   };
 
@@ -311,6 +359,10 @@ function App() {
       </div>
     );
   }
+
+  const filteredVideos = activeTab === 'gallery' && showUnder10MB
+    ? videos.filter(v => videoSizes[v.id] !== undefined && videoSizes[v.id] !== null && videoSizes[v.id] < 10 * 1024 * 1024)
+    : videos;
 
   return (
     <div className="container">
@@ -416,7 +468,21 @@ function App() {
                 <span className="select-icon">▼</span>
               </div>
             </div>
-
+            {/* Filter Switch UI */}
+            <div style={{ margin: '16px 0 8px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <label style={{ color: '#fff', fontSize: 16, fontWeight: 500, cursor: 'pointer', userSelect: 'none' }}>
+                <input
+                  type="checkbox"
+                  checked={showUnder10MB}
+                  onChange={e => setShowUnder10MB(e.target.checked)}
+                  style={{ marginRight: 8 }}
+                />
+                Show only videos under 10MB
+              </label>
+              {fetchingSizes && (
+                <span style={{ color: '#fff', fontSize: 14, marginLeft: 8 }}>Checking sizes...</span>
+              )}
+            </div>
             {error && (
               <div className="error-container">
                 <svg className="error-icon" viewBox="0 0 24 24" width="24" height="24">
@@ -431,7 +497,7 @@ function App() {
               className="masonry-grid"
               columnClassName="masonry-grid_column"
             >
-              {videos.map(vid => (
+              {filteredVideos.map(vid => (
                 <div 
                   key={vid.id} 
                   className={`card ${loadingVideos.has(vid.id) ? 'loading' : ''}`}
@@ -454,6 +520,22 @@ function App() {
                       <svg viewBox="0 0 24 24" width="24" height="24">
                         <path fill="currentColor" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
                       </svg>
+                    </button>
+                    {/* Download button below like button */}
+                    <button
+                      className="download-button"
+                      style={{ marginTop: 8, width: '100%', background: '#232347', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 0', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDownload(vid);
+                      }}
+                    >
+                      <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" strokeWidth="2" fill="none" style={{ marginRight: 4 }}>
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                      Download
                     </button>
                   </div>
                   <div className="video-container" style={{ position: 'relative', width: '100%' }}>
@@ -495,13 +577,13 @@ function App() {
                   <div className="loading-dot"></div>
                 </div>
               )}
-              {(!hasMore && videos.length > 0) && (
+              {(!hasMore && filteredVideos.length > 0) && (
                 <div className="end-message">
                   <span>You've reached the end</span>
                   <div className="end-line"></div>
                 </div>
               )}
-              {(!isLoading && videos.length === 0) && (
+              {(!isLoading && filteredVideos.length === 0) && (
                 <div className="empty-message">
                   <span>No videos found</span>
                 </div>

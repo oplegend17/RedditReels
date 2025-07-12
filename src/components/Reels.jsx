@@ -100,6 +100,9 @@ export default function Reels({ availableSubreddits }) {
   const [showHint, setShowHint] = useState(true);
   const [fadeIn, setFadeIn] = useState(true);
   const [showTooltip, setShowTooltip] = useState(false);
+  const [showUnder10MB, setShowUnder10MB] = useState(false);
+  const [videoSizes, setVideoSizes] = useState({}); // { [videoId]: sizeInBytes }
+  const [fetchingSizes, setFetchingSizes] = useState(false);
 
   // Helper to fetch random reels
   const fetchRandomReels = async () => {
@@ -289,6 +292,41 @@ export default function Reels({ availableSubreddits }) {
   const handleHeartMouseEnter = () => setShowTooltip(true);
   const handleHeartMouseLeave = () => setShowTooltip(false);
 
+  useEffect(() => {
+    // Fetch sizes for all videos if the filter is enabled and sizes are missing
+    if (showUnder10MB && videos.length > 0) {
+      const missing = videos.filter(v => videoSizes[v.id] === undefined);
+      if (missing.length > 0) {
+        setFetchingSizes(true);
+        Promise.all(
+          missing.map(async (v) => {
+            try {
+              const res = await fetch(v.url, { method: 'HEAD' });
+              const size = res.headers.get('Content-Length');
+              return { id: v.id, size: size ? parseInt(size, 10) : null };
+            } catch {
+              return { id: v.id, size: null };
+            }
+          })
+        ).then(results => {
+          setVideoSizes(prev => {
+            const next = { ...prev };
+            results.forEach(({ id, size }) => { next[id] = size; });
+            return next;
+          });
+          setFetchingSizes(false);
+        });
+      }
+    }
+  }, [showUnder10MB, videos]);
+
+  // Filter videos if switch is on and sizes are available
+  const filteredVideos = showUnder10MB
+    ? videos.filter(v => videoSizes[v.id] !== undefined && videoSizes[v.id] !== null && videoSizes[v.id] < 10 * 1024 * 1024)
+    : videos;
+  const filteredCurrentIndex = Math.min(currentIndex, filteredVideos.length - 1);
+  const filteredVideo = filteredVideos[filteredCurrentIndex] || null;
+
   if (loading) return <div style={{ minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading Reels...</div>;
   if (error) return <div style={{ color: 'red' }}>{error}</div>;
   if (!videos.length) return <div>No reels found.</div>;
@@ -321,22 +359,39 @@ export default function Reels({ availableSubreddits }) {
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
     >
+      {/* Filter Switch UI */}
+      <div style={{ position: 'absolute', top: 24, right: 32, zIndex: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <label style={{ color: '#fff', fontSize: 16, fontWeight: 500, cursor: 'pointer', userSelect: 'none' }}>
+          <input
+            type="checkbox"
+            checked={showUnder10MB}
+            onChange={e => setShowUnder10MB(e.target.checked)}
+            style={{ marginRight: 8 }}
+          />
+          Show only reels under 10MB
+        </label>
+        {fetchingSizes && (
+          <span style={{ color: '#fff', fontSize: 14, marginLeft: 8 }}>Checking sizes...</span>
+        )}
+      </div>
       {/* Blurred background for glass effect */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100vw',
-          height: '100%',
-          zIndex: 0,
-          background: `url(${video.url}) center center / cover no-repeat`,
-          filter: 'blur(32px) brightness(0.5) saturate(1.2)',
-          opacity: 0.45,
-          pointerEvents: 'none',
-          transition: 'background 0.5s',
-        }}
-      />
+      {filteredVideo && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100%',
+            zIndex: 0,
+            background: `url(${filteredVideo.url}) center center / cover no-repeat`,
+            filter: 'blur(32px) brightness(0.5) saturate(1.2)',
+            opacity: 0.45,
+            pointerEvents: 'none',
+            transition: 'background 0.5s',
+          }}
+        />
+      )}
       {/* Gradient overlays */}
       <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '12vw', maxHeight: 80, zIndex: 2, pointerEvents: 'none', background: 'linear-gradient(to bottom, rgba(0,0,0,0.7), transparent)' }} />
       <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: '18vw', maxHeight: 120, zIndex: 2, pointerEvents: 'none', background: 'linear-gradient(to top, rgba(0,0,0,0.8), transparent)' }} />
@@ -349,80 +404,85 @@ export default function Reels({ availableSubreddits }) {
           <span>Swipe or scroll for more</span>
         </div>
       )}
-      <div
-        style={{
-          width: 'min(100vw, 100%)',
-          height: 'min(100%, 80vh)',
-          maxWidth: '420px',
-          margin: '0 auto',
-          position: 'relative',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          transition: 'transform 0.3s cubic-bezier(.4,2,.6,1)',
-          transform: transitioning ? 'scale(0.97)' : 'scale(1)',
-          zIndex: 3,
-        }}
-      >
-        {/* Glassmorphic card */}
+      {/* Only render the rest if there is a video to show */}
+      {filteredVideo ? (
         <div
           style={{
-            position: 'absolute',
-            width: '100%',
-            height: '100%',
-            borderRadius: '2em',
-            background: 'rgba(30,30,30,0.38)',
-            boxShadow: '0 12px 48px 0 rgba(0,0,0,0.55)',
-            backdropFilter: 'blur(16px) saturate(1.2)',
-            WebkitBackdropFilter: 'blur(16px) saturate(1.2)',
-            zIndex: 1,
-            top: 0,
-            left: 0,
-          }}
-        />
-        <video
-          ref={videoRef}
-          src={video.url}
-          controls={false}
-          autoPlay
-          loop={false}
-          onEnded={handleVideoEnded}
-          style={{
-            width: '100%',
-            height: '80vh',
-            maxHeight: 'calc(100vh - 120px)',
-            maxWidth: '100vw',
-            borderRadius: '2em',
-            background: '#111',
-            objectFit: 'cover',
-            boxShadow: '0 12px 48px rgba(0,0,0,0.55)',
-            opacity: fadeIn ? 1 : 0,
-            transitionProperty: 'box-shadow, opacity',
-            transitionDuration: '0.3s, 0.5s',
-            zIndex: 2,
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            top: '2.5vw',
-            right: '2.5vw',
-            zIndex: 4,
+            width: 'min(100vw, 100%)',
+            height: 'min(100%, 80vh)',
+            maxWidth: '420px',
+            margin: '0 auto',
+            position: 'relative',
             display: 'flex',
-            flexDirection: 'column',
             alignItems: 'center',
-            gap: 10,
+            justifyContent: 'center',
+            transition: 'transform 0.3s cubic-bezier(.4,2,.6,1)',
+            transform: transitioning ? 'scale(0.97)' : 'scale(1)',
+            zIndex: 3,
           }}
-          onMouseEnter={handleHeartMouseEnter}
-          onMouseLeave={handleHeartMouseLeave}
         >
-          <HeartIcon liked={isFavorite(video.id)} onClick={() => handleLike(video)} animate={heartAnimate} tooltip={showTooltip} />
+          {/* Glassmorphic card */}
+          <div
+            style={{
+              position: 'absolute',
+              width: '100%',
+              height: '100%',
+              borderRadius: '2em',
+              background: 'rgba(30,30,30,0.38)',
+              boxShadow: '0 12px 48px 0 rgba(0,0,0,0.55)',
+              backdropFilter: 'blur(16px) saturate(1.2)',
+              WebkitBackdropFilter: 'blur(16px) saturate(1.2)',
+              zIndex: 1,
+              top: 0,
+              left: 0,
+            }}
+          />
+          <video
+            ref={videoRef}
+            src={filteredVideo.url}
+            controls={false}
+            autoPlay
+            loop={false}
+            onEnded={handleVideoEnded}
+            style={{
+              width: '100%',
+              height: '80vh',
+              maxHeight: 'calc(100vh - 120px)',
+              maxWidth: '100vw',
+              borderRadius: '2em',
+              background: '#111',
+              objectFit: 'cover',
+              boxShadow: '0 12px 48px rgba(0,0,0,0.55)',
+              opacity: fadeIn ? 1 : 0,
+              transitionProperty: 'box-shadow, opacity',
+              transitionDuration: '0.3s, 0.5s',
+              zIndex: 2,
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              top: '2.5vw',
+              right: '2.5vw',
+              zIndex: 4,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: 10,
+            }}
+            onMouseEnter={handleHeartMouseEnter}
+            onMouseLeave={handleHeartMouseLeave}
+          >
+            <HeartIcon liked={isFavorite(filteredVideo.id)} onClick={() => handleLike(filteredVideo)} animate={heartAnimate} tooltip={showTooltip} />
+          </div>
+          <div style={{ position: 'absolute', bottom: '2.5vw', left: '2.5vw', color: '#fff', background: 'rgba(0,0,0,0.45)', borderRadius: '1em', padding: '0.85em 1.5em', maxWidth: '80%', fontFamily: 'inherit', zIndex: 4, boxShadow: '0 2px 8px #0005', fontSize: 'clamp(1rem, 2vw, 1.25rem)' }}>
+            <div style={{ fontWeight: 800, fontSize: 'clamp(1.1rem, 2vw, 1.25rem)', textShadow: '0 2px 8px #000' }}>{filteredVideo.title}</div>
+            <div style={{ fontSize: 'clamp(0.95rem, 1.5vw, 1.05rem)', opacity: 0.88, marginTop: 2 }}>r/{filteredVideo.subreddit}</div>
+          </div>
         </div>
-        <div style={{ position: 'absolute', bottom: '2.5vw', left: '2.5vw', color: '#fff', background: 'rgba(0,0,0,0.45)', borderRadius: '1em', padding: '0.85em 1.5em', maxWidth: '80%', fontFamily: 'inherit', zIndex: 4, boxShadow: '0 2px 8px #0005', fontSize: 'clamp(1rem, 2vw, 1.25rem)' }}>
-          <div style={{ fontWeight: 800, fontSize: 'clamp(1.1rem, 2vw, 1.25rem)', textShadow: '0 2px 8px #000' }}>{video.title}</div>
-          <div style={{ fontSize: 'clamp(0.95rem, 1.5vw, 1.05rem)', opacity: 0.88, marginTop: 2 }}>r/{video.subreddit}</div>
-        </div>
-      </div>
+      ) : (
+        <div style={{ color: '#fff', marginTop: 80, fontSize: 20 }}>No videos found for this filter.</div>
+      )}
       <div style={{ color: '#fff', marginTop: 18, fontSize: 'clamp(1rem, 2vw, 1.1rem)', opacity: 0.8, fontFamily: 'inherit', letterSpacing: 1, zIndex: 5 }}>
         {currentIndex + 1} / {videos.length} {isSeen && <span style={{ color: '#aaa', fontSize: 'clamp(0.85rem, 1vw, 0.95rem)' }}>(seen)</span>}
       </div>
