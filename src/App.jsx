@@ -100,6 +100,8 @@ function App() {
   const [fetchingSizes, setFetchingSizes] = useState(false);
   const [customSubreddit, setCustomSubreddit] = useState('');
   const [usingCustomSubreddit, setUsingCustomSubreddit] = useState(false);
+  const [customAfterId, setCustomAfterId] = useState(null);
+  const [customHasMore, setCustomHasMore] = useState(true);
 
   // Fetch available subreddits on component mount
   useEffect(() => {
@@ -285,13 +287,15 @@ function App() {
     }
   };
 
-  const fetchFromCustomSubreddit = async () => {
+  const fetchFromCustomSubreddit = async (isNew = false) => {
     if (!customSubreddit.trim()) return;
     setIsLoading(true);
     setError(null);
     setUsingCustomSubreddit(true);
     try {
-      const response = await fetch(`${BACKEND_API_URL}/api/reddit/${customSubreddit.trim()}`);
+      const after = isNew ? '' : customAfterId;
+      const url = `${BACKEND_API_URL}/api/reddit/${customSubreddit.trim()}${after ? `?after=${after}` : ''}`;
+      const response = await fetch(url);
       if (!response.ok) throw new Error('Failed to fetch subreddit');
       const data = await response.json();
       // Extract videos from posts
@@ -308,9 +312,11 @@ function App() {
           thumbnail: p?.preview?.images?.[0]?.source?.url?.replace(/&amp;/g, '&') || '',
           subreddit: customSubreddit.trim()
         }));
-      setVideos(vids);
-      setAfterId(null);
-      setHasMore(false);
+      const newAfter = data?.data?.after;
+      setCustomAfterId(newAfter);
+      setCustomHasMore(!!newAfter && vids.length > 0);
+      setVideos(prev => isNew ? vids : [...prev, ...vids]);
+      if (isNew) setAfterId(null);
     } catch (err) {
       setError('Failed to load videos from subreddit.');
     } finally {
@@ -512,11 +518,11 @@ function App() {
                 value={customSubreddit}
                 onChange={e => setCustomSubreddit(e.target.value)}
                 style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #646cff', fontSize: 15, width: 180 }}
-                onKeyDown={e => { if (e.key === 'Enter') fetchFromCustomSubreddit(); }}
+                onKeyDown={e => { if (e.key === 'Enter') fetchFromCustomSubreddit(true); }}
                 disabled={isLoading}
               />
               <button
-                onClick={fetchFromCustomSubreddit}
+                onClick={() => fetchFromCustomSubreddit(true)}
                 style={{ padding: '8px 16px', borderRadius: 8, background: '#646cff', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 15 }}
                 disabled={isLoading}
               >
@@ -524,7 +530,7 @@ function App() {
               </button>
               {usingCustomSubreddit && (
                 <button
-                  onClick={() => { setUsingCustomSubreddit(false); setCustomSubreddit(''); setVideos([]); setAfterId(null); setHasMore(true); setError(null); setIsLoading(true); setSelectedSubreddit(availableSubreddits[0]); }}
+                  onClick={() => { setUsingCustomSubreddit(false); setCustomSubreddit(''); setVideos([]); setAfterId(null); setCustomAfterId(null); setCustomHasMore(true); setHasMore(true); setError(null); setIsLoading(true); setSelectedSubreddit(availableSubreddits[0]); }}
                   style={{ padding: '8px 12px', borderRadius: 8, background: '#232347', color: '#fff', border: 'none', fontWeight: 500, cursor: 'pointer', fontSize: 14 }}
                 >
                   Reset
@@ -633,14 +639,14 @@ function App() {
               ))}
             </Masonry>
               <div ref={loadingRef} className="loading-indicator">
-              {isLoading && hasMore && (
+              {isLoading && ((usingCustomSubreddit ? customHasMore : hasMore)) && (
                 <div className="loading-animation">
                   <div className="loading-dot"></div>
                   <div className="loading-dot"></div>
                   <div className="loading-dot"></div>
                 </div>
               )}
-              {(!hasMore && filteredVideos.length > 0) && (
+              {(!(usingCustomSubreddit ? customHasMore : hasMore) && filteredVideos.length > 0) && (
                 <div className="end-message">
                   <span>You've reached the end</span>
                   <div className="end-line"></div>
