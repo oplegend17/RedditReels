@@ -98,6 +98,8 @@ function App() {
   const [showUnder10MB, setShowUnder10MB] = useState(false);
   const [videoSizes, setVideoSizes] = useState({}); // { [videoId]: sizeInBytes }
   const [fetchingSizes, setFetchingSizes] = useState(false);
+  const [customSubreddit, setCustomSubreddit] = useState('');
+  const [usingCustomSubreddit, setUsingCustomSubreddit] = useState(false);
 
   // Fetch available subreddits on component mount
   useEffect(() => {
@@ -283,6 +285,39 @@ function App() {
     }
   };
 
+  const fetchFromCustomSubreddit = async () => {
+    if (!customSubreddit.trim()) return;
+    setIsLoading(true);
+    setError(null);
+    setUsingCustomSubreddit(true);
+    try {
+      const response = await fetch(`${BACKEND_API_URL}/api/reddit/${customSubreddit.trim()}`);
+      if (!response.ok) throw new Error('Failed to fetch subreddit');
+      const data = await response.json();
+      // Extract videos from posts
+      const vids = (data?.data?.children || [])
+        .map(post => post?.data)
+        .filter(p =>
+          (p?.is_video && p?.media?.reddit_video?.fallback_url) ||
+          (p?.preview?.reddit_video_preview?.fallback_url)
+        )
+        .map(p => ({
+          id: p.id,
+          title: p.title,
+          url: p?.media?.reddit_video?.fallback_url || p?.preview?.reddit_video_preview?.fallback_url,
+          thumbnail: p?.preview?.images?.[0]?.source?.url?.replace(/&amp;/g, '&') || '',
+          subreddit: customSubreddit.trim()
+        }));
+      setVideos(vids);
+      setAfterId(null);
+      setHasMore(false);
+    } catch (err) {
+      setError('Failed to load videos from subreddit.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Reset video states when changing subreddit
   useEffect(() => {
     setPlayingVideos(new Set());
@@ -459,6 +494,7 @@ function App() {
                   value={selectedSubreddit} 
                   onChange={handleSubredditChange}
                   className="subreddit-select"
+                  disabled={usingCustomSubreddit}
                 >
                   <option value="">Choose Subreddit</option>
                   {availableSubreddits.map(sub => (
@@ -467,6 +503,33 @@ function App() {
                 </select>
                 <span className="select-icon">▼</span>
               </div>
+            </div>
+            {/* Custom subreddit input */}
+            <div style={{ margin: '0 0 12px 0', display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
+              <input
+                type="text"
+                placeholder="Enter subreddit (no r/)"
+                value={customSubreddit}
+                onChange={e => setCustomSubreddit(e.target.value)}
+                style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #646cff', fontSize: 15, width: 180 }}
+                onKeyDown={e => { if (e.key === 'Enter') fetchFromCustomSubreddit(); }}
+                disabled={isLoading}
+              />
+              <button
+                onClick={fetchFromCustomSubreddit}
+                style={{ padding: '8px 16px', borderRadius: 8, background: '#646cff', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 15 }}
+                disabled={isLoading}
+              >
+                Fetch
+              </button>
+              {usingCustomSubreddit && (
+                <button
+                  onClick={() => { setUsingCustomSubreddit(false); setCustomSubreddit(''); setVideos([]); setAfterId(null); setHasMore(true); setError(null); setIsLoading(true); setSelectedSubreddit(availableSubreddits[0]); }}
+                  style={{ padding: '8px 12px', borderRadius: 8, background: '#232347', color: '#fff', border: 'none', fontWeight: 500, cursor: 'pointer', fontSize: 14 }}
+                >
+                  Reset
+                </button>
+              )}
             </div>
             {/* Filter Switch UI */}
             <div style={{ margin: '16px 0 8px 0', display: 'flex', alignItems: 'center', gap: 8 }}>

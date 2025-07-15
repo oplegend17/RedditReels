@@ -103,6 +103,8 @@ export default function Reels({ availableSubreddits }) {
   const [showUnder10MB, setShowUnder10MB] = useState(false);
   const [videoSizes, setVideoSizes] = useState({}); // { [videoId]: sizeInBytes }
   const [fetchingSizes, setFetchingSizes] = useState(false);
+  const [customSubreddit, setCustomSubreddit] = useState('');
+  const [usingCustomSubreddit, setUsingCustomSubreddit] = useState(false);
 
   // Helper to fetch random reels
   const fetchRandomReels = async () => {
@@ -122,6 +124,37 @@ export default function Reels({ availableSubreddits }) {
       // Optionally handle error
     } finally {
       setLoadingMore(false);
+    }
+  };
+
+  const fetchFromCustomSubreddit = async () => {
+    if (!customSubreddit.trim()) return;
+    setLoading(true);
+    setError(null);
+    setUsingCustomSubreddit(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/api/reddit/${customSubreddit.trim()}`);
+      const data = await res.json();
+      // Extract videos from posts
+      const vids = (data?.data?.children || [])
+        .map(post => post?.data)
+        .filter(p =>
+          (p?.is_video && p?.media?.reddit_video?.fallback_url) ||
+          (p?.preview?.reddit_video_preview?.fallback_url)
+        )
+        .map(p => ({
+          id: p.id,
+          title: p.title,
+          url: p?.media?.reddit_video?.fallback_url || p?.preview?.reddit_video_preview?.fallback_url,
+          thumbnail: p?.preview?.images?.[0]?.source?.url?.replace(/&amp;/g, '&') || '',
+          subreddit: customSubreddit.trim()
+        }));
+      setVideos(vids);
+      setCurrentIndex(0);
+    } catch (err) {
+      setError('Failed to load reels from subreddit.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -485,6 +518,30 @@ export default function Reels({ availableSubreddits }) {
       )}
       <div style={{ color: '#fff', marginTop: 18, fontSize: 'clamp(1rem, 2vw, 1.1rem)', opacity: 0.8, fontFamily: 'inherit', letterSpacing: 1, zIndex: 5 }}>
         {currentIndex + 1} / {videos.length} {isSeen && <span style={{ color: '#aaa', fontSize: 'clamp(0.85rem, 1vw, 0.95rem)' }}>(seen)</span>}
+      </div>
+      <div style={{ position: 'absolute', top: 24, left: 32, zIndex: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <input
+          type="text"
+          placeholder="Enter subreddit (no r/)"
+          value={customSubreddit}
+          onChange={e => setCustomSubreddit(e.target.value)}
+          style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #646cff', fontSize: 15, width: 180 }}
+          onKeyDown={e => { if (e.key === 'Enter') fetchFromCustomSubreddit(); }}
+        />
+        <button
+          onClick={fetchFromCustomSubreddit}
+          style={{ padding: '8px 16px', borderRadius: 8, background: '#646cff', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 15 }}
+        >
+          Fetch
+        </button>
+        {usingCustomSubreddit && (
+          <button
+            onClick={() => { setUsingCustomSubreddit(false); setCustomSubreddit(''); setVideos([]); setCurrentIndex(0); setError(null); setLoading(true); fetchInitial(); }}
+            style={{ marginLeft: 8, padding: '8px 12px', borderRadius: 8, background: '#232347', color: '#fff', border: 'none', fontWeight: 500, cursor: 'pointer', fontSize: 14 }}
+          >
+            Reset
+          </button>
+        )}
       </div>
     </div>
   );
