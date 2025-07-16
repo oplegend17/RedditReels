@@ -102,6 +102,18 @@ function App() {
   const [usingCustomSubreddit, setUsingCustomSubreddit] = useState(false);
   const [customAfterId, setCustomAfterId] = useState(null);
   const [customHasMore, setCustomHasMore] = useState(true);
+  const [imageGalleryImages, setImageGalleryImages] = useState([]);
+  const [imageGalleryIsLoading, setImageGalleryIsLoading] = useState(false);
+  const [imageGalleryError, setImageGalleryError] = useState(null);
+  const [imageGallerySelectedSubreddit, setImageGallerySelectedSubreddit] = useState('');
+  const [imageGalleryAvailableSubreddits, setImageGalleryAvailableSubreddits] = useState([]);
+  const [imageGalleryAfterId, setImageGalleryAfterId] = useState(null);
+  const [imageGalleryHasMore, setImageGalleryHasMore] = useState(true);
+  const imageGalleryLoadingRef = useRef(null);
+  const [imageGalleryCustomSubreddit, setImageGalleryCustomSubreddit] = useState('');
+  const [imageGalleryUsingCustomSubreddit, setImageGalleryUsingCustomSubreddit] = useState(false);
+  const [imageGalleryCustomAfterId, setImageGalleryCustomAfterId] = useState(null);
+  const [imageGalleryCustomHasMore, setImageGalleryCustomHasMore] = useState(true);
 
   // Fetch available subreddits on component mount
   useEffect(() => {
@@ -347,6 +359,157 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Fetch available subreddits for images on mount
+  useEffect(() => {
+    const fetchImageSubreddits = async () => {
+      try {
+        const response = await fetch(`${BACKEND_API_URL}/api/subreddits`);
+        const data = await response.json();
+        setImageGalleryAvailableSubreddits(data.subreddits);
+        setImageGallerySelectedSubreddit(data.subreddits[0]);
+      } catch (err) {
+        setImageGalleryError('Failed to load subreddits');
+      }
+    };
+    fetchImageSubreddits();
+  }, [BACKEND_API_URL]);
+
+  // Fetch images from subreddit
+  const fetchImages = async (isNewSubreddit = false) => {
+    if (!imageGallerySelectedSubreddit || (!isNewSubreddit && !imageGalleryHasMore)) return;
+    try {
+      setImageGalleryIsLoading(true);
+      setImageGalleryError(null);
+      const response = await fetch(`${BACKEND_API_URL}/api/reddit/${imageGallerySelectedSubreddit}${imageGalleryAfterId && !isNewSubreddit ? `?after=${imageGalleryAfterId}` : ''}`);
+      if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
+      const data = await response.json();
+      // Extract images from posts
+      const imgs = (data?.data?.children || [])
+        .map(post => post?.data)
+        .filter(p => p?.post_hint === 'image' && p?.url && (p?.url.endsWith('.jpg') || p?.url.endsWith('.png') || p?.url.endsWith('.jpeg') || p?.url.endsWith('.gif')))
+        .map(p => ({
+          id: p.id,
+          title: p.title,
+          url: p.url,
+          thumbnail: p.thumbnail && p.thumbnail.startsWith('http') ? p.thumbnail : p.url,
+          subreddit: imageGallerySelectedSubreddit
+        }));
+      const newAfterId = data.data.after;
+      setImageGalleryAfterId(newAfterId);
+      setImageGalleryHasMore(!!newAfterId && imgs.length > 0);
+      setImageGalleryImages(prev => isNewSubreddit ? imgs : [...prev, ...imgs]);
+    } catch (err) {
+      setImageGalleryError('Failed to load images. Please try again later.');
+    } finally {
+      setImageGalleryIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (imageGallerySelectedSubreddit) {
+      setImageGalleryImages([]);
+      setImageGalleryAfterId(null);
+      setImageGalleryHasMore(true);
+      fetchImages(true);
+    }
+  }, [imageGallerySelectedSubreddit]);
+
+  // Infinite scroll for image gallery
+  useEffect(() => {
+    let currentObserver = null;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && imageGalleryHasMore && !imageGalleryIsLoading && imageGallerySelectedSubreddit) {
+          fetchImages();
+        }
+      },
+      {
+        threshold: 0.1,
+        rootMargin: '200px'
+      }
+    );
+    if (imageGalleryLoadingRef.current) {
+      currentObserver = imageGalleryLoadingRef.current;
+      observer.observe(imageGalleryLoadingRef.current);
+    }
+    return () => {
+      if (currentObserver) {
+        observer.unobserve(currentObserver);
+      }
+    };
+  }, [imageGalleryHasMore, imageGalleryIsLoading, imageGalleryAfterId, imageGallerySelectedSubreddit]);
+
+  // Custom subreddit fetch for images
+  const fetchImagesFromCustomSubreddit = async (isNew = false) => {
+    if (!imageGalleryCustomSubreddit.trim()) return;
+    setImageGalleryIsLoading(true);
+    setImageGalleryError(null);
+    setImageGalleryUsingCustomSubreddit(true);
+    try {
+      const after = isNew ? '' : imageGalleryCustomAfterId;
+      const url = `${BACKEND_API_URL}/api/reddit/${imageGalleryCustomSubreddit.trim()}${after ? `?after=${after}` : ''}`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Failed to fetch subreddit');
+      const data = await response.json();
+      const imgs = (data?.data?.children || [])
+        .map(post => post?.data)
+        .filter(p => p?.post_hint === 'image' && p?.url && (p?.url.endsWith('.jpg') || p?.url.endsWith('.png') || p?.url.endsWith('.jpeg') || p?.url.endsWith('.gif')))
+        .map(p => ({
+          id: p.id,
+          title: p.title,
+          url: p.url,
+          thumbnail: p.thumbnail && p.thumbnail.startsWith('http') ? p.thumbnail : p.url,
+          subreddit: imageGalleryCustomSubreddit.trim()
+        }));
+      const newAfter = data?.data?.after;
+      setImageGalleryCustomAfterId(newAfter);
+      setImageGalleryCustomHasMore(!!newAfter && imgs.length > 0);
+      setImageGalleryImages(prev => isNew ? imgs : [...prev, ...imgs]);
+      if (isNew) setImageGalleryAfterId(null);
+    } catch (err) {
+      setImageGalleryError('Failed to load images from subreddit.');
+    } finally {
+      setImageGalleryIsLoading(false);
+    }
+  };
+
+  // Download handler for images
+  const handleImageDownload = async (img) => {
+    // Helper to sanitize filename
+    const sanitize = (str) => str.replace(/[^a-z0-9\-_. ]/gi, '_').slice(0, 80);
+    try {
+      let blob;
+      try {
+        const response = await fetch(img.url, { mode: 'cors' });
+        blob = await response.blob();
+      } catch (err) {
+        // CORS error fallback: try no-cors (may not work for all images)
+        try {
+          const response = await fetch(img.url, { mode: 'no-cors' });
+          blob = await response.blob();
+        } catch (e) {
+          // Fallback to direct link
+          window.open(img.url, '_blank');
+          return;
+        }
+      }
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      // Try to infer extension from url
+      const ext = img.url.split('.').pop().split('?')[0];
+      a.download = `${sanitize(img.title || 'image')}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      // As a last resort, open the image in a new tab
+      window.open(img.url, '_blank');
+      console.error('Download failed:', error);
+    }
+  };
+
   const breakpointColumns = {
     default: 4,
     1440: 3,
@@ -418,6 +581,12 @@ function App() {
               Gallery
             </button>
             <button 
+              className={`nav-button ${activeTab === 'image-gallery' ? 'active' : ''}`}
+              onClick={() => setActiveTab('image-gallery')}
+            >
+              Image Gallery
+            </button>
+            <button 
               className={`nav-button ${activeTab === 'reels' ? 'active' : ''}`}
               onClick={() => setActiveTab('reels')}
             >
@@ -463,6 +632,12 @@ function App() {
             onClick={e => { e.stopPropagation(); setActiveTab('gallery'); setMobileNavOpen(false); }}
           >
             Gallery
+          </button>
+          <button 
+            className={`nav-button${activeTab === 'image-gallery' ? ' active' : ''}`}
+            onClick={e => { e.stopPropagation(); setActiveTab('image-gallery'); setMobileNavOpen(false); }}
+          >
+            Image Gallery
           </button>
           <button 
             className={`nav-button${activeTab === 'reels' ? ' active' : ''}`}
@@ -655,6 +830,124 @@ function App() {
               {(!isLoading && filteredVideos.length === 0) && (
                 <div className="empty-message">
                   <span>No videos found</span>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {activeTab === 'image-gallery' && (
+          <>
+            <div className="subreddit-selector">
+              <div className="select-wrapper">
+                <select 
+                  value={imageGallerySelectedSubreddit} 
+                  onChange={e => setImageGallerySelectedSubreddit(e.target.value)}
+                  className="subreddit-select"
+                  disabled={imageGalleryUsingCustomSubreddit}
+                >
+                  <option value="">Choose Subreddit</option>
+                  {imageGalleryAvailableSubreddits.map(sub => (
+                    <option key={sub} value={sub}>r/{sub}</option>
+                  ))}
+                </select>
+                <span className="select-icon">▼</span>
+              </div>
+            </div>
+            {/* Custom subreddit input */}
+            <div style={{ margin: '0 0 12px 0', display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
+              <input
+                type="text"
+                placeholder="Enter subreddit (no r/)"
+                value={imageGalleryCustomSubreddit}
+                onChange={e => setImageGalleryCustomSubreddit(e.target.value)}
+                style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #646cff', fontSize: 15, width: 180 }}
+                onKeyDown={e => { if (e.key === 'Enter') fetchImagesFromCustomSubreddit(true); }}
+                disabled={imageGalleryIsLoading}
+              />
+              <button
+                onClick={() => fetchImagesFromCustomSubreddit(true)}
+                style={{ padding: '8px 16px', borderRadius: 8, background: '#646cff', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 15 }}
+                disabled={imageGalleryIsLoading}
+              >
+                Fetch
+              </button>
+              {imageGalleryUsingCustomSubreddit && (
+                <button
+                  onClick={() => { setImageGalleryUsingCustomSubreddit(false); setImageGalleryCustomSubreddit(''); setImageGalleryImages([]); setImageGalleryAfterId(null); setImageGalleryCustomAfterId(null); setImageGalleryCustomHasMore(true); setImageGalleryHasMore(true); setImageGalleryError(null); setImageGalleryIsLoading(true); setImageGallerySelectedSubreddit(imageGalleryAvailableSubreddits[0]); }}
+                  style={{ padding: '8px 12px', borderRadius: 8, background: '#232347', color: '#fff', border: 'none', fontWeight: 500, cursor: 'pointer', fontSize: 14 }}
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+            {imageGalleryError && (
+              <div className="error-container">
+                <svg className="error-icon" viewBox="0 0 24 24" width="24" height="24">
+                  <path fill="currentColor" d="M12 4c4.4 0 8 3.6 8 8s-3.6 8-8 8-8-3.6-8-8 3.6-8 8-8zm0-2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm1 13h-2v2h2v-2zm0-8h-2v6h2V7z"/>
+                </svg>
+                <p>{imageGalleryError}</p>
+              </div>
+            )}
+            <Masonry
+              breakpointCols={breakpointColumns}
+              className="masonry-grid"
+              columnClassName="masonry-grid_column"
+            >
+              {imageGalleryImages.map(img => (
+                <div key={img.id} className="card">
+                  <div className="image-container" style={{ position: 'relative', width: '100%' }}>
+                    <img
+                      src={img.url}
+                      alt={img.title}
+                      style={{ 
+                        width: '100%', 
+                        height: '100%',
+                        borderRadius: '10px',
+                        cursor: 'pointer',
+                        objectFit: 'cover'
+                      }}
+                      onClick={() => handleImageDownload(img)}
+                    />
+                  </div>
+                  <div className="card-actions">
+                    <button
+                      className="download-button"
+                      style={{ marginTop: 8, width: '100%', background: '#232347', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 0', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                      onClick={e => {
+                        e.stopPropagation();
+                        handleImageDownload(img);
+                      }}
+                    >
+                      <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" strokeWidth="2" fill="none" style={{ marginRight: 4 }}>
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                      Download
+                    </button>
+                  </div>
+                  <h3 className="video-title">{img.title}</h3>
+                </div>
+              ))}
+            </Masonry>
+            <div ref={imageGalleryLoadingRef} className="loading-indicator">
+              {imageGalleryIsLoading && ((imageGalleryUsingCustomSubreddit ? imageGalleryCustomHasMore : imageGalleryHasMore)) && (
+                <div className="loading-animation">
+                  <div className="loading-dot"></div>
+                  <div className="loading-dot"></div>
+                  <div className="loading-dot"></div>
+                </div>
+              )}
+              {(!(imageGalleryUsingCustomSubreddit ? imageGalleryCustomHasMore : imageGalleryHasMore) && imageGalleryImages.length > 0) && (
+                <div className="end-message">
+                  <span>You've reached the end</span>
+                  <div className="end-line"></div>
+                </div>
+              )}
+              {(!imageGalleryIsLoading && imageGalleryImages.length === 0) && (
+                <div className="empty-message">
+                  <span>No images found</span>
                 </div>
               )}
             </div>
