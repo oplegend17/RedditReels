@@ -475,33 +475,21 @@ function App() {
 
   // Download handler for images
   const handleImageDownload = async (img) => {
-    // Helper to sanitize filename
     const sanitize = (str) => str.replace(/[^a-z0-9\-_. ]/gi, '_').slice(0, 80);
+    const isRedditImage = /^(https?:\/\/(i|preview)\.redd\.it\/)/.test(img.url);
     try {
-      let blob;
-      try {
-        const response = await fetch(img.url, { mode: 'cors' });
-        blob = await response.blob();
-      } catch (err) {
-        // CORS error fallback: try no-cors (may not work for all images)
-        try {
-          const response = await fetch(img.url, { mode: 'no-cors' });
-          blob = await response.blob();
-        } catch (e) {
-          // Fallback to direct link
-          window.open(img.url, '_blank');
-          return;
-        }
+      let downloadUrl = img.url;
+      if (isRedditImage) {
+        // Use backend proxy for Reddit images
+        downloadUrl = `${BACKEND_API_URL}/api/proxy-image?url=${encodeURIComponent(img.url)}`;
       }
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      // Try to infer extension from url
+      // Download via anchor
       const ext = img.url.split('.').pop().split('?')[0];
+      const a = document.createElement('a');
+      a.href = downloadUrl;
       a.download = `${sanitize(img.title || 'image')}.${ext}`;
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
       // As a last resort, open the image in a new tab

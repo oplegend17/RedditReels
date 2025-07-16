@@ -182,6 +182,32 @@ app.get("/api/reels/random", async (req, res) => {
   }
 });
 
+// Proxy image endpoint for direct Reddit image download
+app.get('/api/proxy-image', async (req, res) => {
+  const imageUrl = req.query.url;
+  if (!imageUrl || !/^https?:\/\/(i|preview)\.redd\.it\//.test(imageUrl)) {
+    return res.status(400).json({ error: 'Invalid or missing image URL' });
+  }
+  try {
+    const response = await fetch(imageUrl, {
+      headers: {
+        'User-Agent': process.env.REDDIT_USER_AGENT || 'RedditGalleryProxy/1.0',
+        'Accept': 'image/*',
+      },
+    });
+    if (!response.ok) {
+      return res.status(502).json({ error: 'Failed to fetch image from Reddit' });
+    }
+    // Set headers for download
+    res.setHeader('Content-Type', response.headers.get('content-type') || 'image/jpeg');
+    const filename = imageUrl.split('/').pop().split('?')[0];
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    response.body.pipe(res);
+  } catch (err) {
+    res.status(500).json({ error: 'Proxy error: ' + err.toString() });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`✅ Proxy server running at http://localhost:${PORT}`);
 });
