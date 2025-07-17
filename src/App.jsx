@@ -131,19 +131,55 @@ function App() {
 
     fetchSubreddits();
   }, [BACKEND_API_URL]);
+  // Fetch videos from subreddit (default or custom)
   const fetchVideos = async (isNewSubreddit = false) => {
+    if (usingCustomSubreddit) {
+      // Custom subreddit logic
+      if (!customSubreddit.trim() || (!isNewSubreddit && !customHasMore)) return;
+      try {
+        setIsLoading(true);
+        setError(null);
+        const after = isNewSubreddit ? '' : customAfterId;
+        const url = `${BACKEND_API_URL}/api/reddit/${customSubreddit.trim()}${after ? `?after=${after}` : ''}`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Failed to fetch subreddit');
+        const data = await response.json();
+        // Extract videos from posts
+        const vids = (data?.data?.children || [])
+          .map(post => post?.data)
+          .filter(p =>
+            (p?.is_video && p?.media?.reddit_video?.fallback_url) ||
+            (p?.preview?.reddit_video_preview?.fallback_url)
+          )
+          .map(p => ({
+            id: p.id,
+            title: p.title,
+            url: p?.media?.reddit_video?.fallback_url || p?.preview?.reddit_video_preview?.fallback_url,
+            thumbnail: p?.preview?.images?.[0]?.source?.url?.replace(/&amp;/g, '&') || '',
+            subreddit: customSubreddit.trim()
+          }));
+        const newAfter = data?.data?.after;
+        setCustomAfterId(newAfter);
+        setCustomHasMore(!!newAfter && vids.length > 0);
+        setVideos(prev => isNewSubreddit ? vids : [...prev, ...vids]);
+        if (isNewSubreddit) setAfterId(null);
+      } catch (err) {
+        setError('Failed to load videos from subreddit.');
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+    // Default subreddit logic
     if (!selectedSubreddit || (!isNewSubreddit && !hasMore)) return;
-    
     try {
       setIsLoading(true);
       setError(null);
-      
       const response = await fetch(`${BACKEND_API_URL}/api/reddit/${selectedSubreddit}${afterId && !isNewSubreddit ? `?after=${afterId}` : ''}`);
       if (!response.ok) {
         throw new Error(`HTTP error! Status: ${response.status}`);
       }
       const data = await response.json();
-
       // Extract videos from posts
       const vids = (data?.data?.children || [])
         .map(post => post?.data)
@@ -158,7 +194,6 @@ function App() {
           thumbnail: p?.preview?.images?.[0]?.source?.url?.replace(/&amp;/g, '&') || '',
           subreddit: selectedSubreddit
         }));
-
       const newAfterId = data.data.after;
       setAfterId(newAfterId);
       setHasMore(!!newAfterId && vids.length > 0);
@@ -171,19 +206,17 @@ function App() {
     }
   };
 
-  useEffect(() => {
-    if (selectedSubreddit) {
-      setVideos([]);
-      setAfterId(null);
-      setHasMore(true);
-      fetchVideos(true);
-    }
-  }, [selectedSubreddit]);  // Intersection Observer setup
+  // Intersection Observer for infinite scroll in main gallery
   useEffect(() => {
     let currentObserver = null;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore && !isLoading && selectedSubreddit) {
+        if (
+          entries[0].isIntersecting &&
+          ((usingCustomSubreddit ? customHasMore : hasMore)) &&
+          !isLoading &&
+          (usingCustomSubreddit ? customSubreddit.trim() : selectedSubreddit)
+        ) {
           fetchVideos();
         }
       },
@@ -192,18 +225,32 @@ function App() {
         rootMargin: '200px'
       }
     );
-
     if (loadingRef.current) {
       currentObserver = loadingRef.current;
       observer.observe(loadingRef.current);
     }
-
     return () => {
       if (currentObserver) {
         observer.unobserve(currentObserver);
       }
     };
-  }, [hasMore, isLoading, afterId, selectedSubreddit]);
+  }, [hasMore, customHasMore, isLoading, afterId, customAfterId, selectedSubreddit, customSubreddit, usingCustomSubreddit]);
+
+  // When switching between default and custom subreddit, reset state
+  useEffect(() => {
+    if (usingCustomSubreddit) {
+      setVideos([]);
+      setCustomAfterId(null);
+      setCustomHasMore(true);
+      fetchVideos(true);
+    } else if (selectedSubreddit) {
+      setVideos([]);
+      setAfterId(null);
+      setHasMore(true);
+      fetchVideos(true);
+    }
+    // eslint-disable-next-line
+  }, [selectedSubreddit, usingCustomSubreddit]);
 
   useEffect(() => {
     // Fetch sizes for all videos if the filter is enabled and sizes are missing (only in gallery tab)
