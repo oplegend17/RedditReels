@@ -325,7 +325,7 @@ function ReelVideo({ video, isActive, isMuted, onEnded }) {
         ref={videoRef}
         src={video.url}
         poster={video.thumbnail}
-        className="w-full h-full object-cover"
+        className="w-full h-full object-contain"
         loop={false} // Disable loop for auto-scroll to work
         muted={isMuted}
         playsInline
