@@ -1,49 +1,42 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { auth, db } from '../lib/firebase';
+import { updateProfile } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
-export default function UserProfile({ session }) {
+export default function UserProfile({ user }) {
   const [loading, setLoading] = useState(true);
   const [username, setUsername] = useState(null);
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [updating, setUpdating] = useState(false);
 
   useEffect(() => {
-    if (session?.user) getProfile();
-  }, [session]);
+    if (user) getProfile();
+  }, [user]);
 
   const getProfile = async () => {
     try {
       setLoading(true);
-      const { user } = session;
+      
+      // Try to load from Firestore
+      const profileRef = doc(db, 'users', user.uid);
+      const profileSnap = await getDoc(profileRef);
 
-      let { data, error: fetchError } = await supabase
-        .from('profiles')
-        .select('username, avatar_url')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (fetchError) throw fetchError;
-
-      if (!data) {
-        const defaultUsername = user.email.split('@')[0];
-        const { data: newProfile, error: insertError } = await supabase
-          .from('profiles')
-          .insert({
-            id: user.id,
-            username: defaultUsername,
-            avatar_url: null,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .select('username, avatar_url')
-          .single();
-
-        if (insertError) throw insertError;
-        data = newProfile;
+      if (profileSnap.exists()) {
+        const data = profileSnap.data();
+        setUsername(data.username || user.displayName);
+        setAvatarUrl(data.avatarUrl || user.photoURL);
+      } else {
+        // Create default profile
+        const defaultUsername = user.displayName || user.email.split('@')[0];
+        await setDoc(profileRef, {
+          username: defaultUsername,
+          avatarUrl: user.photoURL || null,
+          email: user.email,
+          createdAt: new Date() 
+        });
+        setUsername(defaultUsername);
+        setAvatarUrl(user.photoURL);
       }
-
-      setUsername(data.username);
-      setAvatarUrl(data.avatar_url);
     } catch (error) {
       console.error('Error fetching profile:', error);
     } finally {
@@ -51,26 +44,28 @@ export default function UserProfile({ session }) {
     }
   };
 
-  const updateProfile = async (e) => {
+  const updateUserProfile = async (e) => {
     e.preventDefault();
     try {
       setUpdating(true);
-      const { user } = session;
 
       if (!username?.trim()) throw new Error('Username cannot be empty');
 
-      const updates = {
-        id: user.id,
+      // Update Firebase Auth profile
+      await updateProfile(auth.currentUser, {
+        displayName: username.trim(),
+        photoURL: avatarUrl?.trim() || null
+      });
+
+      // Update Firestore profile
+      const profileRef = doc(db, 'users', user.uid);
+      await setDoc(profileRef, {
         username: username.trim(),
-        avatar_url: avatarUrl?.trim() || null,
-        updated_at: new Date().toISOString()
-      };
+        avatarUrl: avatarUrl?.trim() || null,
+        email: user.email,
+        updatedAt: new Date()
+      }, { merge: true });
 
-      const { error } = await supabase
-        .from('profiles')
-        .upsert(updates, { returning: 'minimal', onConflict: 'id' });
-
-      if (error) throw error;
       alert('Profile updated successfully!');
     } catch (error) {
       alert(error.message || 'Error updating profile!');
@@ -97,7 +92,7 @@ export default function UserProfile({ session }) {
         PROFILE SETTINGS
       </h2>
       
-      <form onSubmit={updateProfile} className="space-y-8 relative z-10">
+      <form onSubmit={updateUserProfile} className="space-y-8 relative z-10">
         <div className="flex flex-col items-center gap-6">
           <div className="relative group">
             <div className="w-40 h-40 rounded-full overflow-hidden border-4 border-white/10 group-hover:border-neon-pink transition-all duration-300 shadow-[0_0_30px_rgba(0,0,0,0.5)] group-hover:shadow-[0_0_30px_rgba(255,47,86,0.3)]">
@@ -111,7 +106,7 @@ export default function UserProfile({ session }) {
             </div>
           </div>
           <div className="text-center">
-            <p className="text-neutral-400 font-mono text-sm tracking-wider">{session.user.email}</p>
+            <p className="text-neutral-400 font-mono text-sm tracking-wider">{user.email}</p>
           </div>
         </div>
 

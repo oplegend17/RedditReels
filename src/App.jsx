@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import Masonry from 'react-masonry-css';
-import { supabase } from './lib/supabase';
+import { auth } from './lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import { useFavorites } from './lib/useFavorites';
 import Auth from './components/Auth';
 import UserProfile from './components/UserProfile';
@@ -92,7 +93,8 @@ function VideoModal({ video, onClose }) {
 }
 
 function App() {
-  const [session, setSession] = useState(null);
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [videos, setVideos] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -317,11 +319,13 @@ function App() {
     return () => observer.disconnect();
   }, [isLoading, imageGalleryIsLoading, activeTab, hasMore, customHasMore, imageGalleryHasMore, imageGalleryCustomHasMore]);
 
-  // Auth
+  // Firebase Auth
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
-    return () => subscription.unsubscribe();
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setLoading(false);
+    });
+    return () => unsubscribe();
   }, []);
 
   const handleFavoriteClick = async (e, video) => {
@@ -358,7 +362,15 @@ function App() {
     setVideos([]); // Clear videos to force fresh fetch
   };
 
-  if (!session) return <Auth />;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-black">
+        <div className="w-12 h-12 border-4 border-neon-pink border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (!user) return <Auth />;
 
   if (!consentGiven) {
     return (
@@ -423,7 +435,7 @@ function App() {
 
           <button 
             className="hidden md:block px-6 py-2.5 rounded-full border border-white/20 text-white font-medium hover:bg-white/10 transition-all cursor-pointer" 
-            onClick={() => supabase.auth.signOut()}
+            onClick={() => auth.signOut()}
           >
             Sign Out
           </button>
@@ -440,7 +452,7 @@ function App() {
           {['gallery', 'image-gallery', 'reels', 'challenges', 'stats', 'favorites', 'profile'].map(tab => (
             <button key={tab} className="text-2xl font-bold capitalize text-white" onClick={() => setActiveTab(tab)}>{tab.replace('-', ' ')}</button>
           ))}
-          <button className="text-xl text-red-500 font-bold" onClick={() => supabase.auth.signOut()}>Sign Out</button>
+          <button className="text-xl text-red-500 font-bold" onClick={() => auth.signOut()}>Sign Out</button>
         </div>
       )}
 
@@ -612,7 +624,7 @@ function App() {
           </div>
         )}
         {activeTab === 'favorites' && <Favorites />}
-        {activeTab === 'profile' && <UserProfile session={session} />}
+        {activeTab === 'profile' && <UserProfile user={user} />}
       </main>
 
       {selectedVideo && <VideoModal video={selectedVideo} onClose={() => setSelectedVideo(null)} />}

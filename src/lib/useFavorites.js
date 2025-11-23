@@ -1,79 +1,93 @@
 import { useState, useEffect } from 'react';
-import { supabase } from './supabase';
+import { auth, db } from './firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { collection, doc, setDoc, deleteDoc, query, orderBy, onSnapshot } from 'firebase/firestore';
+
+const STORAGE_KEY = 'reddit-reels-favorites';
 
 export function useFavorites() {
   const [favorites, setFavorites] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
 
+  // Load from local storage initially
   useEffect(() => {
-    const fetchUserFavorites = async () => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) {
-          setFavorites([]);
-          return;
-        }
-
-        const { data, error } = await supabase
-          .from('favorites')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
-        setFavorites(data || []);
-      } catch (error) {
-        console.error('Error fetching favorites:', error);
-      } finally {
-        setLoading(false);
+        setFavorites(JSON.parse(saved));
+      } catch (e) {
+        console.error('Error loading favorites from local storage', e);
       }
-    };
+    }
+    setLoading(false);
+  }, []);
 
-    fetchUserFavorites();
+  // Listen to auth changes and sync with Firestore
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      
+      if (currentUser) {
+        // User logged in - sync with Firestore
+        const favoritesRef = collection(db, 'users', currentUser.uid, 'favorites');
+        const q = query(favoritesRef, orderBy('addedAt', 'desc'));
+        
+        const unsubscribeFavorites = onSnapshot(q, (snapshot) => {
+          const firestoreFavorites = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          setFavorites(firestoreFavorites);
+          // Also save to local storage as backup
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(firestoreFavorites));
+        }, (error) => {
+          console.error('Error listening to favorites:', error);
+        });
 
-    // Subscribe to auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN') {
-        fetchUserFavorites();
-      } else if (event === 'SIGNED_OUT') {
-        setFavorites([]);
+        return () => unsubscribeFavorites();
+      } else {
+        // User logged out - use local storage only
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          try {
+            setFavorites(JSON.parse(saved));
+          } catch (e) {
+            setFavorites([]);
+          }
+        }
       }
     });
 
-    return () => {
-      subscription?.unsubscribe();
-    };
+    return () => unsubscribe();
   }, []);
 
   const addFavorite = async (video) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
+      const newFavorite = {
+        id: video.id,
+        videoId: video.id,
+        title: video.title,
+        url: video.url,
+        thumbnail: video.thumbnail,
+        subreddit: video.subreddit,
+        addedAt: new Date()
+      };
 
-      const { data, error } = await supabase
-        .from('favorites')
-        .upsert([
-          {
-            user_id: user.id,
-            video_id: video.id,
-            subreddit: video.subreddit,
-            video_url: video.url,
-            title: video.title
-          }
-        ], { 
-          onConflict: 'user_id,video_id',
-          returning: 'representation' 
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      
-      setFavorites(prev => {
-        const exists = prev.some(f => f.video_id === video.id);
-        if (exists) return prev;
-        return [data, ...prev];
-      });
+      if (user) {
+        // Add to Firestore
+        const favoriteRef = doc(db, 'users', user.uid, 'favorites', video.id);
+        await setDoc(favoriteRef, newFavorite);
+      } else {
+        // Add to local storage only
+        setFavorites(prev => {
+          const exists = prev.some(f => f.id === video.id);
+          if (exists) return prev;
+          const updated = [newFavorite, ...prev];
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+          return updated;
+        });
+      }
       return true;
     } catch (error) {
       console.error('Error adding favorite:', error.message);
@@ -83,17 +97,18 @@ export function useFavorites() {
 
   const removeFavorite = async (videoId) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
-      const { error } = await supabase
-        .from('favorites')
-        .delete()
-        .match({ user_id: user.id, video_id: videoId });
-
-      if (error) throw error;
-      
-      setFavorites(prev => prev.filter(fav => fav.video_id !== videoId));
+      if (user) {
+        // Remove from Firestore
+        const favoriteRef = doc(db, 'users', user.uid, 'favorites', videoId);
+        await deleteDoc(favoriteRef);
+      } else {
+        // Remove from local storage only
+        setFavorites(prev => {
+          const updated = prev.filter(fav => fav.id !== videoId);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+          return updated;
+        });
+      }
       return true;
     } catch (error) {
       console.error('Error removing favorite:', error.message);
@@ -102,7 +117,7 @@ export function useFavorites() {
   };
 
   const isFavorite = (videoId) => {
-    return favorites.some(fav => fav.video_id === videoId);
+    return favorites.some(fav => fav.id === videoId || fav.videoId === videoId);
   };
 
   return {

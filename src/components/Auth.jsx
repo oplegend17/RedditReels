@@ -1,5 +1,10 @@
 import { useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { auth } from '../lib/firebase';
+import { 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword,
+  updateProfile 
+} from 'firebase/auth';
 
 export default function Auth() {
   const [loading, setLoading] = useState(false);
@@ -18,21 +23,38 @@ export default function Auth() {
     try {
       setLoading(true);
       if (isSignUp) {
-        const { error: authError } = await supabase.auth.signUp({
-          email,
-          password,
-        });
-        if (authError) throw authError;
-        setSuccessMsg('Sign up successful! Please check your email to verify your account.');
+        // Create user with Firebase
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        
+        // Update profile with username if provided
+        if (username) {
+          await updateProfile(userCredential.user, {
+            displayName: username
+          });
+        }
+        
+        setSuccessMsg('Sign up successful! Welcome to Reddit Reels!');
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
+        // Sign in with Firebase
+        await signInWithEmailAndPassword(auth, email, password);
       }
     } catch (error) {
-      setErrorMsg(error.message);
+      // Firebase error handling
+      let message = error.message;
+      if (error.code === 'auth/email-already-in-use') {
+        message = 'This email is already registered. Please sign in.';
+      } else if (error.code === 'auth/weak-password') {
+        message = 'Password should be at least 6 characters long.';
+      } else if (error.code === 'auth/invalid-email') {
+        message = 'Invalid email address.';
+      } else if (error.code === 'auth/user-not-found') {
+        message = 'No account found with this email.';
+      } else if (error.code === 'auth/wrong-password') {
+        message = 'Incorrect password.';
+      } else if (error.code === 'auth/invalid-credential') {
+        message = 'Invalid credentials. Please check your email and password.';
+      }
+      setErrorMsg(message);
     } finally {
       setLoading(false);
     }
