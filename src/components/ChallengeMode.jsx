@@ -7,7 +7,7 @@ import { useFavorites } from '../lib/useFavorites';
 import IntensityMeter from './IntensityMeter';
 import ChallengeOverlay from './ChallengeOverlay';
 import AchievementPopup from './AchievementSystem';
-import { addToLeaderboard } from './Leaderboard';
+import { addToLeaderboard } from '../lib/leaderboardService';
 import { auth } from '../lib/firebase';
 
 const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || 'http://localhost:3000';

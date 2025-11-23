@@ -1,47 +1,22 @@
 import { useState, useEffect } from 'react';
 import { getIcon } from './GamificationIcons';
-
-const STORAGE_KEY = 'reddit-reels-leaderboard';
+import { getLeaderboardData } from '../lib/leaderboardService';
 
 export default function Leaderboard({ currentStats }) {
   const [timeFilter, setTimeFilter] = useState('all'); // all, week, month
   const [challengeFilter, setChallengeFilter] = useState('all');
   const [leaderboardData, setLeaderboardData] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     loadLeaderboard();
-  }, []);
+  }, [timeFilter, challengeFilter]);
 
-  const loadLeaderboard = () => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      setLeaderboardData(JSON.parse(saved));
-    }
-  };
-
-  const getFilteredData = () => {
-    let filtered = [...leaderboardData];
-
-    // Filter by challenge type
-    if (challengeFilter !== 'all') {
-      filtered = filtered.filter(entry => entry.challengeType === challengeFilter);
-    }
-
-    // Filter by time
-    const now = Date.now();
-    if (timeFilter === 'week') {
-      const weekAgo = now - (7 * 24 * 60 * 60 * 1000);
-      filtered = filtered.filter(entry => entry.timestamp >= weekAgo);
-    } else if (timeFilter === 'month') {
-      const monthAgo = now - (30 * 24 * 60 * 60 * 1000);
-      filtered = filtered.filter(entry => entry.timestamp >= monthAgo);
-    }
-
-    // Sort by duration (descending)
-    filtered.sort((a, b) => b.duration - a.duration);
-
-    // Take top 10
-    return filtered.slice(0, 10);
+  const loadLeaderboard = async () => {
+    setIsLoading(true);
+    const data = await getLeaderboardData(timeFilter, challengeFilter);
+    setLeaderboardData(data);
+    setIsLoading(false);
   };
 
   const formatTime = (seconds) => {
@@ -62,7 +37,8 @@ export default function Leaderboard({ currentStats }) {
     return <span className="text-white/50 font-bold">#{index + 1}</span>;
   };
 
-  const topScores = getFilteredData();
+  // Data is already filtered and sorted by the service, but let's ensure we only take top 10 for display
+  const topScores = leaderboardData.slice(0, 10);
 
   return (
     <div className="max-w-4xl mx-auto p-8">
@@ -114,7 +90,11 @@ export default function Leaderboard({ currentStats }) {
 
       {/* Leaderboard Table */}
       <div className="glass-panel rounded-2xl overflow-hidden border border-white/10">
-        {topScores.length === 0 ? (
+        {isLoading ? (
+          <div className="p-12 flex justify-center">
+            <div className="w-8 h-8 border-4 border-neon-pink border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        ) : topScores.length === 0 ? (
           <div className="p-12 text-center text-white/60">
             <div className="w-24 h-24 mx-auto mb-4 text-white/20">
               {getIcon('rankGeneric')}
@@ -262,12 +242,3 @@ export default function Leaderboard({ currentStats }) {
     </div>
   );
 }
-
-// Export helper to add scores
-export const addToLeaderboard = (entry) => {
-  const STORAGE_KEY = 'reddit-reels-leaderboard';
-  const saved = localStorage.getItem(STORAGE_KEY);
-  const data = saved ? JSON.parse(saved) : [];
-  const newData = [...data, { ...entry, timestamp: Date.now() }];
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
-};
