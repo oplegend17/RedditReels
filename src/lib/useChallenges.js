@@ -94,7 +94,7 @@ export const useChallenges = () => {
 
   // Start a challenge
   const startChallenge = useCallback((challengeType, duration = null) => {
-    const challenge = CHALLENGE_TYPES[challengeType];
+    const challenge = Object.values(CHALLENGE_TYPES).find(c => c.id === challengeType);
     if (!challenge) return;
 
     setActiveChallenge(challenge);

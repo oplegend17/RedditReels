@@ -464,7 +464,7 @@ export default function ChallengeMode() {
           loop={selectedChallenge?.id !== 'rapidFire' && selectedChallenge?.id !== 'roulette'}
           muted={false}
           playsInline
-          className="w-full h-full object-cover"
+          className="w-full h-full object-contain"
           onEnded={() => {
             if (selectedChallenge?.id === 'rapidFire' || selectedChallenge?.id === 'roulette') {
               nextVideo();
