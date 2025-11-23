@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useChallenges, CHALLENGE_TYPES } from '../lib/useChallenges';
 import { useIntensity } from '../lib/useIntensity';
 import { useAchievements } from '../lib/useAchievements';
@@ -7,7 +8,7 @@ import ChallengeOverlay from './ChallengeOverlay';
 import AchievementPopup from './AchievementSystem';
 import { addToLeaderboard } from './Leaderboard';
 
-const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL;
+const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || 'http://localhost:3000';
 
 const CHALLENGE_ICONS = {
   tryNotToCum: (
@@ -43,6 +44,8 @@ const CHALLENGE_ICONS = {
 };
 
 export default function ChallengeMode() {
+  const { challengeId } = useParams();
+  const navigate = useNavigate();
   const [selectedChallenge, setSelectedChallenge] = useState(null);
   const [selectedDuration, setSelectedDuration] = useState(null);
   const [videos, setVideos] = useState([]);
@@ -50,54 +53,26 @@ export default function ChallengeMode() {
   const [isLoading, setIsLoading] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [results, setResults] = useState(null);
+  const [error, setError] = useState(null);
 
   const challenges = useChallenges();
   const intensity = useIntensity(challenges.isActive);
   const achievements = useAchievements();
 
-  // Fetch videos for challenge
-  const fetchChallengeVideos = useCallback(async (challengeType) => {
-    setIsLoading(true);
-    try {
-      let subreddit = 'nsfw+porn+bonermaterial+nsfw_gifs+60fpsporn';
-      
-      // For endurance run, prioritize high heat content
-      if (challengeType === 'enduranceRun') {
-        subreddit = 'nsfw+hardcore+rough+anal+deepthroat+bdsm';
+  // Sync URL with state
+  useEffect(() => {
+    const challenge = Object.values(CHALLENGE_TYPES).find(c => c.id === challengeId);
+    if (challengeId && challenge) {
+      setSelectedChallenge(challenge);
+      // Default duration if not set
+      if (!selectedDuration && challenge.durations) {
+        setSelectedDuration(challenge.durations[0]);
       }
-      
-      // For roulette, completely random
-      if (challengeType === 'roulette') {
-        subreddit = 'all'; // This will give truly random NSFW content
-      }
-
-      const response = await fetch(`${BACKEND_API_URL}/api/reddit/${subreddit}`);
-      const data = await response.json();
-      
-      const vids = (data?.data?.children  || [])
-        .map(post => post?.data)
-        .filter(p => 
-          (p?.is_video && p?.media?.reddit_video?.fallback_url) ||
-          (p?.preview?.reddit_video_preview?.fallback_url)
-        )
-        .map(p => ({
-          id: p.id,
-          title: p.title,
-          url: p?.media?.reddit_video?.fallback_url || p?.preview?.reddit_video_preview?.fallback_url,
-          thumbnail: p?.preview?.images?.[0]?.source?.url?.replace(/&amp;/g, '&') || '',
-          subreddit: p.subreddit,
-          ups: p.ups || 0,
-          heat: calculateHeat(p.ups)
-        }));
-
-      setVideos(vids);
-      setCurrentVideoIndex(0);
-    } catch (error) {
-      console.error('Failed to fetch videos:', error);
-    } finally {
-      setIsLoading(false);
+    } else {
+      setSelectedChallenge(null);
+      setSelectedDuration(null);
     }
-  }, []);
+  }, [challengeId]);
 
   const calculateHeat = (ups) => {
     if (ups > 5000) return 'nuclear';
@@ -105,6 +80,85 @@ export default function ChallengeMode() {
     if (ups > 500) return 'spicy';
     return null;
   };
+
+  // Fetch videos for challenge
+  const fetchChallengeVideos = useCallback(async (challengeType) => {
+    setIsLoading(true);
+    setError(null);
+    
+    const fetchFromSubreddit = async (sub) => {
+      try {
+        const response = await fetch(`${BACKEND_API_URL}/api/reddit/${sub}`);
+        if (!response.ok) throw new Error('Network response was not ok');
+        const data = await response.json();
+        return (data?.data?.children || [])
+          .map(post => post?.data)
+          .filter(p => 
+            (p?.is_video && p?.media?.reddit_video?.fallback_url) ||
+            (p?.preview?.reddit_video_preview?.fallback_url)
+          )
+          .map(p => ({
+            id: p.id,
+            title: p.title,
+            url: p?.media?.reddit_video?.fallback_url || p?.preview?.reddit_video_preview?.fallback_url,
+            thumbnail: p?.preview?.images?.[0]?.source?.url?.replace(/&amp;/g, '&') || '',
+            subreddit: p.subreddit,
+            ups: p.ups || 0,
+            heat: calculateHeat(p.ups)
+          }));
+      } catch (err) {
+        console.error(`Failed to fetch from ${sub}:`, err);
+        return [];
+      }
+    };
+
+    try {
+      let primarySub = 'nsfw+porn+bonermaterial+nsfw_gifs+60fpsporn';
+      let backupSub = 'nsfw_hardcore+grool+squirting';
+
+      // For endurance run, prioritize high heat content
+      if (challengeType === 'enduranceRun') {
+        primarySub = 'nsfw+hardcore+rough+anal+deepthroat+bdsm';
+        backupSub = 'BDSMcommunity+Bondage';
+      }
+      
+      // For roulette, completely random
+      if (challengeType === 'roulette') {
+        primarySub = 'all'; 
+        backupSub = 'random';
+      }
+
+      // Try primary subreddit
+      let vids = await fetchFromSubreddit(primarySub);
+
+      // If no videos, try backup
+      if (vids.length === 0) {
+        console.log('Primary fetch failed or empty, trying backup...');
+        vids = await fetchFromSubreddit(backupSub);
+      }
+
+      // If still no videos, try a reliable fallback
+      if (vids.length === 0) {
+        console.log('Backup fetch failed, trying reliable fallback...');
+        vids = await fetchFromSubreddit('nsfw');
+      }
+
+      if (vids.length === 0) {
+        throw new Error('No videos found. Please check your internet connection or try again later.');
+      }
+
+      // Shuffle videos for randomness
+      vids = vids.sort(() => Math.random() - 0.5);
+
+      setVideos(vids);
+      setCurrentVideoIndex(0);
+    } catch (error) {
+      console.error('Failed to fetch challenge videos:', error);
+      setError(error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   // Start challenge
   const handleStartChallenge = async () => {
@@ -227,15 +281,20 @@ export default function ChallengeMode() {
             </p>
           </div>
 
+          {/* Error Message */}
+          {error && (
+            <div className="max-w-md mx-auto mb-8 p-4 bg-red-500/20 border border-red-500 rounded-xl text-center text-red-200">
+              <p className="font-bold">Error starting challenge:</p>
+              <p className="text-sm">{error}</p>
+            </div>
+          )}
+
           {/* Challenge Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             {Object.values(CHALLENGE_TYPES).map(challenge => (
               <button
                 key={challenge.id}
-                onClick={() => {
-                  setSelectedChallenge(challenge);
-                  setSelectedDuration(challenge.durations ? challenge.durations[0] : 600);
-                }}
+                onClick={() => navigate(`/challenges/${challenge.id}`)}
                 className={`text-left p-6 rounded-2xl border-2 transition-all duration-300 ${
                   selectedChallenge?.id === challenge.id
                     ? 'bg-neon-pink/20 border-neon-pink scale-105 shadow-[0_0_30px_rgba(255,47,86,0.4)]'
@@ -369,9 +428,8 @@ export default function ChallengeMode() {
               <button
                 onClick={() => {
                   setShowResults(false);
-                  setSelectedChallenge(null);
-                  setSelectedDuration(null);
                   challenges.endChallenge();
+                  navigate('/challenges');
                 }}
                 className="flex-1 px-6 py-4 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold transition-all duration-300"
               >
