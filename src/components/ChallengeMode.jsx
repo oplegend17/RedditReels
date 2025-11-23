@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useChallenges, CHALLENGE_TYPES } from '../lib/useChallenges';
 import { useIntensity } from '../lib/useIntensity';
 import { useAchievements } from '../lib/useAchievements';
+import { useFavorites } from '../lib/useFavorites';
 import IntensityMeter from './IntensityMeter';
 import ChallengeOverlay from './ChallengeOverlay';
 import AchievementPopup from './AchievementSystem';
@@ -58,6 +59,7 @@ export default function ChallengeMode() {
   const challenges = useChallenges();
   const intensity = useIntensity(challenges.isActive);
   const achievements = useAchievements();
+  const { isFavorite, addFavorite, removeFavorite } = useFavorites();
 
   // Sync URL with state
   useEffect(() => {
@@ -263,6 +265,17 @@ export default function ChallengeMode() {
       handleChallengeComplete();
     }
   }, [challenges.challengeState, handleChallengeComplete]);
+
+  const handleToggleFavorite = async (e) => {
+    e?.stopPropagation();
+    if (!currentVideo) return;
+    
+    if (isFavorite(currentVideo.id)) {
+      await removeFavorite(currentVideo.id);
+    } else {
+      await addFavorite({ ...currentVideo, subreddit: currentVideo.subreddit });
+    }
+  };
 
   const currentVideo = videos[currentVideoIndex];
 
@@ -499,14 +512,29 @@ export default function ChallengeMode() {
       />
 
       {/* Next Video Button (for non-auto modes) */}
-      {selectedChallenge?.id !== 'rapidFire' && selectedChallenge?.id !== 'roulette' && (
+      <div className="fixed bottom-24 right-8 z-50 flex gap-4">
         <button
-          onClick={nextVideo}
-          className="fixed bottom-24 right-8 z-50 px-6 py-3 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white font-bold transition-all duration-300"
+          onClick={handleToggleFavorite}
+          className={`w-14 h-14 flex items-center justify-center rounded-full backdrop-blur-md border transition-all duration-300 ${
+            currentVideo && isFavorite(currentVideo.id)
+              ? 'bg-neon-pink text-white border-neon-pink shadow-[0_0_20px_rgba(255,47,86,0.5)]'
+              : 'bg-white/20 hover:bg-white/30 border-white/30 text-white'
+          }`}
         >
-          Next Video →
+          <svg className={`w-6 h-6 ${currentVideo && isFavorite(currentVideo.id) ? 'fill-current' : 'fill-none'}`} stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+          </svg>
         </button>
-      )}
+
+        {selectedChallenge?.id !== 'rapidFire' && selectedChallenge?.id !== 'roulette' && (
+          <button
+            onClick={nextVideo}
+            className="px-6 py-3 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white font-bold transition-all duration-300"
+          >
+            Next Video →
+          </button>
+        )}
+      </div>
     </div>
   );
 }
