@@ -29,16 +29,6 @@ export default function ChallengeOverlay({
       <div className="fixed top-24 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
         <div className="glass-panel px-6 py-3 rounded-full border-2 border-neon-pink/50 shadow-[0_0_20px_rgba(255,47,86,0.3)] animate-in fade-in slide-in-from-top duration-500">
           <div className="flex items-center gap-4">
-            {/* Challenge Name */}
-            <div className="text-center">
-              <div className="text-xs text-white/60 uppercase tracking-wider mb-0.5">Challenge</div>
-              <div className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-neon-pink to-neon-blue">
-                {challengeName}
-              </div>
-            </div>
-
-            <div className="w-px h-8 bg-white/20" />
-
             {/* Timer */}
             <div className="text-center min-w-[120px]">
               <div className="text-xs text-white/60 uppercase tracking-wider mb-0.5">{getTimerLabel()}</div>
@@ -46,16 +36,6 @@ export default function ChallengeOverlay({
                 remainingTime !== null && remainingTime <= 30 ? 'text-red-500 animate-pulse' : 'text-white'
               }`}>
                 {getRemainingDisplay()}
-              </div>
-            </div>
-
-            <div className="w-px h-8 bg-white/20" />
-
-            {/* Videos Watched */}
-            <div className="text-center">
-              <div className="text-xs text-white/60 uppercase tracking-wider mb-0.5">Videos</div>
-              <div className="text-lg font-bold text-neon-blue">
-                {videosWatched}
               </div>
             </div>
           </div>

@@ -8,6 +8,7 @@ import IntensityMeter from './IntensityMeter';
 import ChallengeOverlay from './ChallengeOverlay';
 import AchievementPopup from './AchievementSystem';
 import { addToLeaderboard } from './Leaderboard';
+import DrippingEffect from './DrippingEffect';
 
 const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || 'http://localhost:3000';
 
@@ -55,6 +56,7 @@ export default function ChallengeMode() {
   const [showResults, setShowResults] = useState(false);
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
+  const [isStarting, setIsStarting] = useState(false);
 
   const challenges = useChallenges();
   const intensity = useIntensity(challenges.isActive);
@@ -170,6 +172,7 @@ export default function ChallengeMode() {
     challenges.startChallenge(selectedChallenge.id, selectedDuration);
     intensity.reset();
     setShowResults(false);
+    setIsStarting(true);
   };
 
   // Handle video change
@@ -191,31 +194,30 @@ export default function ChallengeMode() {
     }
   }, [currentVideoIndex, videos, challenges, achievements, selectedChallenge, fetchChallengeVideos]);
 
-  // Auto-advance for rapid fire and roulette
+  // Handle previous video
+  const previousVideo = useCallback(() => {
+    if (currentVideoIndex > 0) {
+      setCurrentVideoIndex(prev => prev - 1);
+    }
+  }, [currentVideoIndex]);
+
+  // Keyboard controls
   useEffect(() => {
     if (!challenges.isActive) return;
-    
-    const isRapidFire = selectedChallenge?.id === 'rapidFire';
-    const isRoulette = selectedChallenge?.id === 'roulette';
-    
-    if (isRapidFire || isRoulette) {
-      const intervalTime = isRapidFire ? 12000 : 25000; // 12s for rapid fire, 25s for roulette
-      const autoAdvance = setInterval(nextVideo, intervalTime);
-      return () => clearInterval(autoAdvance);
-    }
-  }, [challenges.isActive, selectedChallenge, nextVideo]);
 
-  // Update intensity based on current video
-  useEffect(() => {
-    if (challenges.isActive && videos[currentVideoIndex]) {
-      const currentVideo = videos[currentVideoIndex];
-      intensity.startAccumulation(currentVideo.heat || 'normal');
-    } else {
-      intensity.stopAccumulation();
-    }
+    const handleKeyDown = (e) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        nextVideo();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        previousVideo();
+      }
+    };
 
-    return () => intensity.stopAccumulation();
-  }, [challenges.isActive, currentVideoIndex, videos, intensity]);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [challenges.isActive, nextVideo, previousVideo]);
 
   // Handle challenge completion
   const handleChallengeComplete = useCallback(() => {
@@ -486,11 +488,10 @@ export default function ChallengeMode() {
         />
       )}
 
-      {/* Intensity Meter */}
-      <IntensityMeter 
-        intensity={intensity.intensity}
-        dangerZone={intensity.dangerZone}
-      />
+      {/* Dripping Effect */}
+      {isStarting && (
+        <DrippingEffect onComplete={() => setIsStarting(false)} />
+      )}
 
       {/* Challenge Overlay */}
       <ChallengeOverlay
@@ -511,27 +512,47 @@ export default function ChallengeMode() {
         onClose={() => {}}
       />
 
-      {/* Next Video Button (for non-auto modes) */}
-      <div className="fixed bottom-24 right-8 z-50 flex gap-4">
+      {/* Side Controls (Navigation & Like) */}
+      <div className="fixed right-8 top-1/2 -translate-y-1/2 z-50 flex flex-col gap-6">
+        {/* Previous Video (Up Arrow) */}
+        {selectedChallenge?.id !== 'rapidFire' && selectedChallenge?.id !== 'roulette' && (
+          <button
+            onClick={previousVideo}
+            disabled={currentVideoIndex === 0}
+            className="w-16 h-16 flex items-center justify-center rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md border border-white/20 hover:border-white/50 text-white transition-all duration-300 disabled:opacity-30 disabled:cursor-not-allowed hover:scale-110 group"
+            title="Previous Video (Up Arrow)"
+          >
+            <svg className="w-8 h-8 group-hover:-translate-y-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 15l7-7 7 7" />
+            </svg>
+          </button>
+        )}
+
+        {/* Like Button */}
         <button
           onClick={handleToggleFavorite}
-          className={`w-14 h-14 flex items-center justify-center rounded-full backdrop-blur-md border transition-all duration-300 ${
+          className={`w-16 h-16 flex items-center justify-center rounded-full backdrop-blur-md border transition-all duration-300 hover:scale-110 ${
             currentVideo && isFavorite(currentVideo.id)
               ? 'bg-neon-pink text-white border-neon-pink shadow-[0_0_20px_rgba(255,47,86,0.5)]'
-              : 'bg-white/20 hover:bg-white/30 border-white/30 text-white'
+              : 'bg-black/40 hover:bg-black/60 border-white/20 hover:border-white/50 text-white'
           }`}
+          title="Like Video"
         >
-          <svg className={`w-6 h-6 ${currentVideo && isFavorite(currentVideo.id) ? 'fill-current' : 'fill-none'}`} stroke="currentColor" viewBox="0 0 24 24">
+          <svg className={`w-8 h-8 ${currentVideo && isFavorite(currentVideo.id) ? 'fill-current' : 'fill-none'}`} stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
           </svg>
         </button>
 
+        {/* Next Video (Down Arrow) */}
         {selectedChallenge?.id !== 'rapidFire' && selectedChallenge?.id !== 'roulette' && (
           <button
             onClick={nextVideo}
-            className="px-6 py-3 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white font-bold transition-all duration-300"
+            className="w-16 h-16 flex items-center justify-center rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md border border-white/20 hover:border-white/50 text-white transition-all duration-300 hover:scale-110 group"
+            title="Next Video (Down Arrow)"
           >
-            Next Video →
+            <svg className="w-8 h-8 group-hover:translate-y-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+            </svg>
           </button>
         )}
       </div>
