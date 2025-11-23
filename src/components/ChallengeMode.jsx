@@ -8,7 +8,7 @@ import IntensityMeter from './IntensityMeter';
 import ChallengeOverlay from './ChallengeOverlay';
 import AchievementPopup from './AchievementSystem';
 import { addToLeaderboard } from './Leaderboard';
-import DrippingEffect from './DrippingEffect';
+import { auth } from '../lib/firebase';
 
 const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || 'http://localhost:3000';
 
@@ -232,7 +232,8 @@ export default function ChallengeMode() {
     // Add to leaderboard
     addToLeaderboard({
       ...challengeData,
-      intensity: intensity.intensity
+      intensity: intensity.intensity,
+      username: auth.currentUser?.displayName || 'Anonymous'
     });
 
     // Show results
@@ -486,11 +487,6 @@ export default function ChallengeMode() {
             }
           }}
         />
-      )}
-
-      {/* Dripping Effect */}
-      {isStarting && (
-        <DrippingEffect onComplete={() => setIsStarting(false)} />
       )}
 
       {/* Challenge Overlay */}

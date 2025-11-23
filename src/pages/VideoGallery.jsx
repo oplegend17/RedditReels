@@ -161,10 +161,32 @@ export default function VideoGallery() {
 
   const breakpointColumns = { default: 4, 1440: 3, 1100: 2, 700: 1 };
 
+  const [showNav, setShowNav] = useState(true);
+  const lastScrollY = useRef(0);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      
+      if (currentScrollY > lastScrollY.current && currentScrollY > 100) {
+        setShowNav(false);
+      } else {
+        setShowNav(true);
+      }
+      
+      lastScrollY.current = currentScrollY;
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   return (
     <>
       <div 
-        className="flex flex-col gap-6 mb-12 sticky top-24 z-30 pointer-events-none"
+        className={`flex flex-col gap-6 mb-12 sticky top-24 z-30 pointer-events-none transition-transform duration-300 ${
+          showNav ? 'translate-y-0' : '-translate-y-[140%]'
+        }`}
       >
         {/* Mood Selector */}
         <div className="pointer-events-auto flex gap-3 overflow-x-auto pb-4 no-scrollbar max-w-full mx-auto">

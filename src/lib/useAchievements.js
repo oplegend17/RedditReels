@@ -49,6 +49,26 @@ export const useAchievements = () => {
     localStorage.setItem(UNLOCKED_KEY, JSON.stringify(unlockedAchievements));
   }, [unlockedAchievements]);
 
+  // Calculate Level based on XP
+  // Level 1: 0-1000 XP
+  // Level 2: 1000-2500 XP
+  // Level 3: 2500-5000 XP
+  // etc.
+  const calculateLevel = useCallback((xp) => {
+    if (!xp) return 1;
+    return Math.floor(1 + Math.sqrt(xp / 500));
+  }, []);
+
+  const getLevelProgress = useCallback((xp) => {
+    const currentLevel = calculateLevel(xp);
+    const nextLevel = currentLevel + 1;
+    const currentLevelXp = 500 * Math.pow(currentLevel - 1, 2);
+    const nextLevelXp = 500 * Math.pow(nextLevel - 1, 2);
+    
+    const progress = ((xp - currentLevelXp) / (nextLevelXp - currentLevelXp)) * 100;
+    return Math.min(Math.max(progress, 0), 100);
+  }, [calculateLevel]);
+
   // Check for newly unlocked achievements
   useEffect(() => {
     const currentlyUnlocked = getUnlockedAchievements(stats);
@@ -57,6 +77,22 @@ export const useAchievements = () => {
     if (newUnlocks.length > 0) {
       setUnlockedAchievements(prev => [...prev, ...newUnlocks]);
       setNewlyUnlocked(newUnlocks);
+      
+      // Award XP for new achievements
+      let xpGain = 0;
+      newUnlocks.forEach(id => {
+        const achievement = ACHIEVEMENTS[id];
+        if (achievement) {
+          xpGain += achievement.xp || 0;
+        }
+      });
+
+      if (xpGain > 0) {
+        setStats(prev => ({
+          ...prev,
+          xp: (prev.xp || 0) + xpGain
+        }));
+      }
       
       // Clear newly unlocked after showing animation
       setTimeout(() => setNewlyUnlocked([]), 5000);
@@ -78,6 +114,10 @@ export const useAchievements = () => {
     if (heat === 'nuclear') incrementStat('nuclearVideosWatched');
     if (heat === 'fire') incrementStat('fireVideosWatched');
     if (heat === 'spicy') incrementStat('spicyVideosWatched');
+    
+    // Small XP gain for watching intense videos
+    if (heat === 'nuclear') incrementStat('xp', 10);
+    if (heat === 'fire') incrementStat('xp', 5);
   }, [incrementStat]);
 
   const recordChallengeComplete = useCallback((challengeType, duration = 0) => {
@@ -85,6 +125,16 @@ export const useAchievements = () => {
     
     setStats(prev => {
       const newStats = { ...prev };
+      
+      // Base XP for completion
+      let xpGain = 100;
+      
+      // Bonus XP for duration (10 XP per minute)
+      if (duration > 0) {
+        xpGain += Math.floor(duration / 60) * 10;
+      }
+
+      newStats.xp = (prev.xp || 0) + xpGain;
       
       // Increment total challenges
       newStats.challengesCompleted = (prev.challengesCompleted || 0) + 1;
@@ -111,6 +161,8 @@ export const useAchievements = () => {
       
       if (prev.lastChallengeDate === yesterdayStr) {
         newStats.dailyStreak = (prev.dailyStreak || 0) + 1;
+        // Streak bonus XP
+        newStats.xp += (newStats.dailyStreak * 50);
       } else if (prev.lastChallengeDate !== today) {
         newStats.dailyStreak = 1;
       }
@@ -171,6 +223,8 @@ export const useAchievements = () => {
 
   return {
     stats,
+    level: calculateLevel(stats.xp || 0),
+    levelProgress: getLevelProgress(stats.xp || 0),
     unlockedAchievements,
     newlyUnlocked,
     updateStats,

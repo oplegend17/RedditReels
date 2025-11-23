@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ACHIEVEMENT_TIERS } from '../lib/achievements';
+import { getIcon } from './GamificationIcons';
 
 export default function AchievementPopup({ achievements = [], onClose }) {
   const [visible, setVisible] = useState(false);
@@ -27,46 +28,57 @@ export default function AchievementPopup({ achievements = [], onClose }) {
         return (
           <div 
             key={achievement.id}
-            className="mb-4 glass-panel p-6 rounded-2xl border-2 min-w-[320px] animate-in slide-in-from-right duration-500"
+            className="mb-4 glass-panel p-6 rounded-2xl border-2 min-w-[320px] animate-in slide-in-from-right duration-500 overflow-hidden relative"
             style={{
               borderColor: tier.color,
               boxShadow: `0 0 30px ${tier.glow}`,
               animationDelay: `${index * 150}ms`
             }}
           >
-            {/* Achievement Unlocked Header */}
-            <div className="text-center mb-3">
-              <div className="text-xs font-black uppercase tracking-wider text-white/60 mb-1">
-                Achievement Unlocked!
-              </div>
-              <div 
-                className="text-sm font-bold uppercase tracking-wide"
-                style={{ color: tier.color }}
-              >
-                {tier.label} Tier
-              </div>
-            </div>
+            {/* Background Glow */}
+            <div 
+              className={`absolute inset-0 opacity-20 ${tier.bg}`} 
+            />
 
-            {/* Achievement Icon */}
-            <div className="text-center mb-3">
-              <div 
-                className="text-6xl inline-block animate-bounce"
-                style={{
-                  filter: `drop-shadow(0 0 20px ${tier.glow})`
-                }}
-              >
-                {achievement.icon}
+            <div className="relative z-10">
+              {/* Achievement Unlocked Header */}
+              <div className="text-center mb-3">
+                <div className="text-xs font-black uppercase tracking-wider text-white/60 mb-1">
+                  Achievement Unlocked!
+                </div>
+                <div 
+                  className="text-sm font-bold uppercase tracking-wide flex items-center justify-center gap-2"
+                  style={{ color: tier.color }}
+                >
+                  {tier.label} Tier
+                  <span className="text-xs bg-white/10 px-2 py-0.5 rounded-full text-white/80">
+                    +{achievement.xp} XP
+                  </span>
+                </div>
               </div>
-            </div>
 
-            {/* Achievement Details */}
-            <div className="text-center">
-              <h3 className="text-xl font-black text-white mb-1">
-                {achievement.name}
-              </h3>
-              <p className="text-sm text-white/70">
-                {achievement.description}
-              </p>
+              {/* Achievement Icon */}
+              <div className="flex justify-center mb-4">
+                <div 
+                  className="w-16 h-16 p-3 rounded-xl bg-black/40 backdrop-blur-sm border border-white/10 animate-bounce"
+                  style={{
+                    color: tier.color,
+                    boxShadow: `0 0 20px ${tier.glow}`
+                  }}
+                >
+                  {getIcon(achievement.iconName)}
+                </div>
+              </div>
+
+              {/* Achievement Details */}
+              <div className="text-center">
+                <h3 className="text-xl font-black text-white mb-1">
+                  {achievement.name}
+                </h3>
+                <p className="text-sm text-white/70">
+                  {achievement.description}
+                </p>
+              </div>
             </div>
 
             {/* Sparkle Effect */}
@@ -137,10 +149,11 @@ export function AchievementGallery({ achievements, unlockedIds, stats, getProgre
         return (
           <div key={tierKey} className="mb-12">
             <h3 
-              className="text-2xl font-black mb-6 uppercase tracking-wider"
+              className="text-2xl font-black mb-6 uppercase tracking-wider flex items-center gap-3"
               style={{ color: tier.color }}
             >
               {tier.label} Tier
+              <div className="h-px flex-1 bg-gradient-to-r from-current to-transparent opacity-50" />
             </h3>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -151,7 +164,7 @@ export function AchievementGallery({ achievements, unlockedIds, stats, getProgre
                 return (
                   <div
                     key={achievement.id}
-                    className={`glass-panel p-6 rounded-2xl border-2 transition-all duration-300 ${
+                    className={`glass-panel p-6 rounded-2xl border-2 transition-all duration-300 relative overflow-hidden group ${
                       isUnlocked 
                         ? 'border-opacity-100 hover:scale-105' 
                         : 'opacity-60 border-opacity-30'
@@ -161,46 +174,67 @@ export function AchievementGallery({ achievements, unlockedIds, stats, getProgre
                       boxShadow: isUnlocked ? `0 0 20px ${tier.glow}` : 'none'
                     }}
                   >
-                    {/* Icon */}
-                    <div className="text-5xl text-center mb-4">
-                      {isUnlocked ? achievement.icon : '🔒'}
-                    </div>
-
-                    {/* Name & Description */}
-                    <h4 className="text-lg font-bold text-white text-center mb-2">
-                      {achievement.name}
-                    </h4>
-                    <p className="text-sm text-white/70 text-center mb-4">
-                      {achievement.description}
-                    </p>
-
-                    {/* Progress Bar (for locked achievements) */}
-                    {!isUnlocked && (
-                      <div className="mt-4">
-                        <div className="flex justify-between text-xs text-white/60 mb-1">
-                          <span>Progress</span>
-                          <span>{Math.round(progress)}%</span>
-                        </div>
-                        <div className="h-2 bg-black/50 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full transition-all duration-300"
-                            style={{
-                              width: `${progress}%`,
-                              backgroundColor: tier.color
-                            }}
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Unlocked Badge */}
+                    {/* Background Tint */}
                     {isUnlocked && (
-                      <div className="text-center mt-4">
-                        <span className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-green-500/20 text-green-500 border border-green-500/50">
-                          ✓ Unlocked
-                        </span>
-                      </div>
+                      <div className={`absolute inset-0 opacity-10 ${tier.bg} group-hover:opacity-20 transition-opacity`} />
                     )}
+
+                    <div className="relative z-10">
+                      {/* Header: XP & Status */}
+                      <div className="flex justify-between items-start mb-4">
+                        <span className="text-xs font-bold px-2 py-1 rounded bg-black/40 text-white/80 border border-white/10">
+                          {achievement.xp} XP
+                        </span>
+                        {isUnlocked ? (
+                          <span className="text-xs font-bold text-green-500 flex items-center gap-1">
+                            ✓ Unlocked
+                          </span>
+                        ) : (
+                          <span className="text-xs font-bold text-white/40 flex items-center gap-1">
+                            🔒 Locked
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Icon */}
+                      <div className="flex justify-center mb-4">
+                        <div 
+                          className={`w-16 h-16 p-3 rounded-xl bg-black/40 backdrop-blur-sm border border-white/10 transition-transform duration-300 ${
+                            isUnlocked ? 'group-hover:scale-110 group-hover:rotate-3' : 'grayscale opacity-50'
+                          }`}
+                          style={{ color: isUnlocked ? tier.color : 'white' }}
+                        >
+                          {getIcon(achievement.iconName)}
+                        </div>
+                      </div>
+
+                      {/* Name & Description */}
+                      <h4 className="text-lg font-bold text-white text-center mb-2">
+                        {achievement.name}
+                      </h4>
+                      <p className="text-sm text-white/70 text-center mb-4 min-h-[40px]">
+                        {achievement.description}
+                      </p>
+
+                      {/* Progress Bar (for locked achievements) */}
+                      {!isUnlocked && (
+                        <div className="mt-2">
+                          <div className="flex justify-between text-xs text-white/60 mb-1">
+                            <span>Progress</span>
+                            <span>{Math.round(progress)}%</span>
+                          </div>
+                          <div className="h-1.5 bg-black/50 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full transition-all duration-300"
+                              style={{
+                                width: `${progress}%`,
+                                backgroundColor: tier.color
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 );
               })}
