@@ -6,6 +6,7 @@ import Auth from './components/Auth';
 import UserProfile from './components/UserProfile';
 import Favorites from './components/Favorites';
 import Reels from './components/Reels';
+import { LazyVideo, LazyImage } from './components/LazyMedia';
 
 const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL;
 
@@ -95,17 +96,12 @@ function App() {
   const [afterId, setAfterId] = useState(null);
   const [hasMore, setHasMore] = useState(true);
   const loadingRef = useRef(null);
-  const [playingVideos, setPlayingVideos] = useState(new Set());
-  const [loadingVideos, setLoadingVideos] = useState(new Set());
-  const videoRefs = useRef({});
+  const [playingVideoId, setPlayingVideoId] = useState(null);
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [activeTab, setActiveTab] = useState('gallery');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { favorites, addFavorite, removeFavorite, isFavorite } = useFavorites();
   const [consentGiven, setConsentGiven] = useState(() => localStorage.getItem('reddit-reels-consent') === 'true');
-  const [showUnder10MB, setShowUnder10MB] = useState(false);
-  const [videoSizes, setVideoSizes] = useState({});
-  const [fetchingSizes, setFetchingSizes] = useState(false);
   const [customSubreddit, setCustomSubreddit] = useState('');
   const [usingCustomSubreddit, setUsingCustomSubreddit] = useState(false);
   const [customAfterId, setCustomAfterId] = useState(null);
@@ -279,20 +275,6 @@ function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
     return () => subscription.unsubscribe();
   }, []);
-
-  const handleVideoMouseEnter = (videoId) => {
-    setPlayingVideos(prev => new Set([...prev, videoId]));
-    videoRefs.current[videoId]?.play().catch(() => {});
-  };
-
-  const handleVideoMouseLeave = (videoId) => {
-    setPlayingVideos(prev => {
-      const next = new Set([...prev]);
-      next.delete(videoId);
-      return next;
-    });
-    videoRefs.current[videoId]?.pause();
-  };
 
   const handleFavoriteClick = async (e, video) => {
     e.stopPropagation();
@@ -472,41 +454,21 @@ function App() {
                 <div 
                   key={vid.id} 
                   className="group relative mb-6 bg-dark-card rounded-2xl overflow-hidden border border-white/5 shadow-lg transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_10px_40px_rgba(0,0,0,0.5)] hover:border-white/20 cursor-pointer"
-                  onMouseEnter={() => handleVideoMouseEnter(vid.id)}
-                  onMouseLeave={() => handleVideoMouseLeave(vid.id)}
+                  onMouseEnter={() => setPlayingVideoId(vid.id)}
+                  onMouseLeave={() => setPlayingVideoId(null)}
                   onClick={() => setSelectedVideo(vid)}
                 >
                   <div className="relative aspect-[9/16] bg-black">
-                    <video
-                      ref={el => videoRefs.current[vid.id] = el}
+                    <LazyVideo 
                       src={vid.url}
                       poster={vid.thumbnail}
-                      loop
-                      muted
-                      playsInline
-                      className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-500"
+                      isPlaying={playingVideoId === vid.id}
+                      title={vid.title}
+                      isLiked={isFavorite(vid.id)}
+                      onToggleLike={(e) => handleFavoriteClick(e, vid)}
+                      onDownload={(e) => handleDownload(e, vid)}
+                      className="w-full h-full"
                     />
-                    
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity duration-300"></div>
-                    
-                    <div className="absolute top-3 right-3 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
-                      <button 
-                        className={`w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md border transition-all duration-300 ${isFavorite(vid.id) ? 'bg-neon-pink/20 border-neon-pink text-neon-pink' : 'bg-black/50 border-white/10 text-white hover:bg-white/20'}`}
-                        onClick={(e) => handleFavoriteClick(e, vid)}
-                      >
-                        <svg className={`w-5 h-5 ${isFavorite(vid.id) ? 'fill-current' : ''}`} viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" fill="none"><path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
-                      </button>
-                      <button 
-                        className="w-10 h-10 rounded-full flex items-center justify-center bg-black/50 backdrop-blur-md border border-white/10 text-white hover:bg-white/20 transition-all duration-300"
-                        onClick={(e) => handleDownload(e, vid)}
-                      >
-                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-                      </button>
-                    </div>
-
-                    <div className="absolute bottom-0 left-0 right-0 p-5 translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
-                      <h3 className="text-sm font-bold text-white line-clamp-2 leading-relaxed drop-shadow-md">{vid.title}</h3>
-                    </div>
                   </div>
                 </div>
               ))}
@@ -526,26 +488,11 @@ function App() {
                   className="group relative mb-6 bg-dark-card rounded-2xl overflow-hidden border border-white/5 shadow-lg transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_10px_40px_rgba(0,0,0,0.5)] hover:border-white/20"
                 >
                   <div className="relative">
-                    <img 
-                      src={img.url} 
+                    <LazyImage
+                      src={img.url}
                       alt={img.title}
-                      className="w-full h-auto object-cover"
-                      loading="lazy"
+                      onDownload={(e) => handleDownload(e, img)}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-0 group-hover:opacity-60 transition-opacity duration-300"></div>
-                    
-                    <div className="absolute top-3 right-3 z-20 opacity-0 group-hover:opacity-100 transition-all duration-300">
-                      <button 
-                        className="w-10 h-10 rounded-full flex items-center justify-center bg-black/50 backdrop-blur-md border border-white/10 text-white hover:bg-white/20 transition-all duration-300"
-                        onClick={(e) => handleDownload(e, img)}
-                      >
-                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
-                      </button>
-                    </div>
-
-                    <div className="absolute bottom-0 left-0 right-0 p-5 translate-y-2 opacity-0 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300">
-                      <h3 className="text-sm font-bold text-white line-clamp-2 leading-relaxed drop-shadow-md">{img.title}</h3>
-                    </div>
                   </div>
                 </div>
               ))}
