@@ -109,6 +109,10 @@ function App() {
   const [customHasMore, setCustomHasMore] = useState(true);
   const [selectedMood, setSelectedMood] = useState(null);
   
+  // Immersive Scroll State
+  const [showNav, setShowNav] = useState(true);
+  const lastScrollY = useRef(0);
+
   // Image Gallery State
   const [imageGalleryImages, setImageGalleryImages] = useState([]);
   const [imageGalleryIsLoading, setImageGalleryIsLoading] = useState(false);
@@ -122,6 +126,23 @@ function App() {
   const [imageGalleryUsingCustomSubreddit, setImageGalleryUsingCustomSubreddit] = useState(false);
   const [imageGalleryCustomAfterId, setImageGalleryCustomAfterId] = useState(null);
   const [imageGalleryCustomHasMore, setImageGalleryCustomHasMore] = useState(true);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      
+      if (currentScrollY > lastScrollY.current && currentScrollY > 100) {
+        setShowNav(false);
+      } else {
+        setShowNav(true);
+      }
+      
+      lastScrollY.current = currentScrollY;
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   useEffect(() => {
     const fetchSubreddits = async () => {
@@ -361,7 +382,9 @@ function App() {
   return (
     <div className="min-h-screen text-white pb-20">
       {/* Header */}
-      <header className="sticky top-0 z-50 glass-panel border-b-0 rounded-none mb-8">
+      <header 
+        className={`fixed top-0 left-0 right-0 z-50 glass-panel border-b-0 rounded-none mb-8 transition-transform duration-300 ${showNav ? 'translate-y-0' : '-translate-y-full'}`}
+      >
         <div className="max-w-[1800px] mx-auto px-6 h-20 flex items-center justify-between">
           <h1 className="text-3xl font-black tracking-tighter italic bg-clip-text text-transparent bg-gradient-to-r from-white via-neon-blue to-neon-pink drop-shadow-[0_0_10px_rgba(0,243,255,0.3)]">
             REDDIT REELS
@@ -412,9 +435,11 @@ function App() {
         </div>
       )}
 
-      <main className="max-w-[1800px] mx-auto px-4 md:px-8">
+      <main className="max-w-[1800px] mx-auto px-4 md:px-8 pt-24">
         {(activeTab === 'gallery' || activeTab === 'image-gallery') && (
-          <div className="flex flex-col gap-6 mb-12 sticky top-24 z-30 pointer-events-none">
+          <div 
+            className={`flex flex-col gap-6 mb-12 sticky top-24 z-30 pointer-events-none transition-all duration-300 ${showNav ? 'translate-y-0 opacity-100' : '-translate-y-20 opacity-0'}`}
+          >
             {/* Mood Selector */}
             {activeTab === 'gallery' && (
               <div className="pointer-events-auto flex gap-3 overflow-x-auto pb-4 no-scrollbar max-w-full mx-auto">
