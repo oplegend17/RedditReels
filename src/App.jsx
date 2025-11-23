@@ -6,7 +6,6 @@ import Auth from './components/Auth';
 import UserProfile from './components/UserProfile';
 import Favorites from './components/Favorites';
 import Reels from './components/Reels';
-import './App.css';
 
 const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL;
 
@@ -15,9 +14,7 @@ function VideoModal({ video, onClose }) {
 
   useEffect(() => {
     const handleEsc = (e) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
+      if (e.key === 'Escape') onClose();
     };
     window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
@@ -45,30 +42,44 @@ function VideoModal({ video, onClose }) {
   };
 
   return (
-    <div className="video-modal-overlay" onClick={onClose}>
-      <div className="video-modal-content" onClick={e => e.stopPropagation()}>
-        <button className="close-button" onClick={onClose}>×</button>
-        <div className="video-controls-sidebar">
-          <h2 className="modal-title">{video.title}</h2>
-          <button className="download-button" onClick={handleDownload}>
-            <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" strokeWidth="2" fill="none">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            Download
-          </button>
-        </div>
-        <video
-          ref={videoRef}
-          src={video.url}
-          controls
-          autoPlay
-          loop
-          className="modal-video"
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md animate-in fade-in duration-300" onClick={onClose}>
+      <div className="relative flex flex-col md:flex-row gap-8 max-w-[95vw] max-h-[90vh] p-4 md:p-8 bg-black/40 border border-white/10 rounded-3xl backdrop-blur-xl shadow-2xl animate-in zoom-in-95 duration-300" onClick={e => e.stopPropagation()}>
+        <button 
+          className="absolute -top-4 -right-4 md:top-4 md:right-4 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 hover:rotate-90 transition-all duration-300 z-50 backdrop-blur-md" 
+          onClick={onClose}
         >
-          <source src={video.url} type="video/mp4" />
-        </video>
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+        </button>
+        
+        <div className="order-2 md:order-1 w-full md:w-80 flex flex-col gap-6 h-fit self-center">
+          <h2 className="text-2xl font-bold text-white leading-tight text-glow">{video.title}</h2>
+          <div className="flex flex-col gap-4 mt-auto">
+             <button 
+              className="flex items-center justify-center gap-3 px-6 py-4 bg-neon-pink hover:bg-red-600 text-white rounded-xl font-bold shadow-[0_0_20px_rgba(255,47,86,0.3)] hover:shadow-[0_0_30px_rgba(255,47,86,0.5)] hover:-translate-y-0.5 transition-all duration-300 cursor-pointer" 
+              onClick={handleDownload}
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              Download Video
+            </button>
+          </div>
+        </div>
+
+        <div className="order-1 md:order-2 relative rounded-2xl overflow-hidden shadow-2xl shadow-black/50 border border-white/5">
+          <video
+            ref={videoRef}
+            src={video.url}
+            controls
+            autoPlay
+            loop
+            className="max-h-[50vh] md:max-h-[80vh] w-auto object-contain bg-black"
+          >
+            <source src={video.url} type="video/mp4" />
+          </video>
+        </div>
       </div>
     </div>
   );
@@ -85,23 +96,22 @@ function App() {
   const [hasMore, setHasMore] = useState(true);
   const loadingRef = useRef(null);
   const [playingVideos, setPlayingVideos] = useState(new Set());
-  const [clickedVideos, setClickedVideos] = useState(new Set());
   const [loadingVideos, setLoadingVideos] = useState(new Set());
   const videoRefs = useRef({});
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [activeTab, setActiveTab] = useState('gallery');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const { favorites, loading: favoritesLoading, addFavorite, removeFavorite, isFavorite } = useFavorites();
-  const [consentGiven, setConsentGiven] = useState(() => {
-    return localStorage.getItem('reddit-reels-consent') === 'true';
-  });
+  const { favorites, addFavorite, removeFavorite, isFavorite } = useFavorites();
+  const [consentGiven, setConsentGiven] = useState(() => localStorage.getItem('reddit-reels-consent') === 'true');
   const [showUnder10MB, setShowUnder10MB] = useState(false);
-  const [videoSizes, setVideoSizes] = useState({}); // { [videoId]: sizeInBytes }
+  const [videoSizes, setVideoSizes] = useState({});
   const [fetchingSizes, setFetchingSizes] = useState(false);
   const [customSubreddit, setCustomSubreddit] = useState('');
   const [usingCustomSubreddit, setUsingCustomSubreddit] = useState(false);
   const [customAfterId, setCustomAfterId] = useState(null);
   const [customHasMore, setCustomHasMore] = useState(true);
+  
+  // Image Gallery State
   const [imageGalleryImages, setImageGalleryImages] = useState([]);
   const [imageGalleryIsLoading, setImageGalleryIsLoading] = useState(false);
   const [imageGalleryError, setImageGalleryError] = useState(null);
@@ -115,72 +125,39 @@ function App() {
   const [imageGalleryCustomAfterId, setImageGalleryCustomAfterId] = useState(null);
   const [imageGalleryCustomHasMore, setImageGalleryCustomHasMore] = useState(true);
 
-  // Fetch available subreddits on component mount
   useEffect(() => {
     const fetchSubreddits = async () => {
       try {
         const response = await fetch(`${BACKEND_API_URL}/api/subreddits`);
         const data = await response.json();
         setAvailableSubreddits(data.subreddits);
-        setSelectedSubreddit(data.subreddits[0]); // Set first subreddit as default
+        setImageGalleryAvailableSubreddits(data.subreddits);
+        setSelectedSubreddit(data.subreddits[0]);
+        setImageGallerySelectedSubreddit(data.subreddits[0]);
       } catch (err) {
         console.error('Error fetching subreddits:', err);
         setError('Failed to load subreddits');
       }
     };
-
     fetchSubreddits();
-  }, [BACKEND_API_URL]);
-  // Fetch videos from subreddit (default or custom)
+  }, []);
+
   const fetchVideos = async (isNewSubreddit = false) => {
-    if (usingCustomSubreddit) {
-      // Custom subreddit logic
-      if (!customSubreddit.trim() || (!isNewSubreddit && !customHasMore)) return;
-      try {
-        setIsLoading(true);
-        setError(null);
-        const after = isNewSubreddit ? '' : customAfterId;
-        const url = `${BACKEND_API_URL}/api/reddit/${customSubreddit.trim()}${after ? `?after=${after}` : ''}`;
-        const response = await fetch(url);
-        if (!response.ok) throw new Error('Failed to fetch subreddit');
-        const data = await response.json();
-        // Extract videos from posts
-        const vids = (data?.data?.children || [])
-          .map(post => post?.data)
-          .filter(p =>
-            (p?.is_video && p?.media?.reddit_video?.fallback_url) ||
-            (p?.preview?.reddit_video_preview?.fallback_url)
-          )
-          .map(p => ({
-            id: p.id,
-            title: p.title,
-            url: p?.media?.reddit_video?.fallback_url || p?.preview?.reddit_video_preview?.fallback_url,
-            thumbnail: p?.preview?.images?.[0]?.source?.url?.replace(/&amp;/g, '&') || '',
-            subreddit: customSubreddit.trim()
-          }));
-        const newAfter = data?.data?.after;
-        setCustomAfterId(newAfter);
-        setCustomHasMore(!!newAfter && vids.length > 0);
-        setVideos(prev => isNewSubreddit ? vids : [...prev, ...vids]);
-        if (isNewSubreddit) setAfterId(null);
-      } catch (err) {
-        setError('Failed to load videos from subreddit.');
-      } finally {
-        setIsLoading(false);
-      }
-      return;
-    }
-    // Default subreddit logic
-    if (!selectedSubreddit || (!isNewSubreddit && !hasMore)) return;
+    const isCustom = usingCustomSubreddit;
+    const sub = isCustom ? customSubreddit.trim() : selectedSubreddit;
+    const after = isCustom ? (isNewSubreddit ? '' : customAfterId) : (isNewSubreddit ? '' : afterId);
+    const hasMoreCheck = isCustom ? (isNewSubreddit || customHasMore) : (isNewSubreddit || hasMore);
+
+    if (!sub || !hasMoreCheck) return;
+
     try {
       setIsLoading(true);
       setError(null);
-      const response = await fetch(`${BACKEND_API_URL}/api/reddit/${selectedSubreddit}${afterId && !isNewSubreddit ? `?after=${afterId}` : ''}`);
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
-      }
+      const url = `${BACKEND_API_URL}/api/reddit/${sub}${after ? `?after=${after}` : ''}`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Failed to fetch');
       const data = await response.json();
-      // Extract videos from posts
+      
       const vids = (data?.data?.children || [])
         .map(post => post?.data)
         .filter(p => 
@@ -192,827 +169,399 @@ function App() {
           title: p.title,
           url: p?.media?.reddit_video?.fallback_url || p?.preview?.reddit_video_preview?.fallback_url,
           thumbnail: p?.preview?.images?.[0]?.source?.url?.replace(/&amp;/g, '&') || '',
-          subreddit: selectedSubreddit
+          subreddit: sub
         }));
-      const newAfterId = data.data.after;
-      setAfterId(newAfterId);
-      setHasMore(!!newAfterId && vids.length > 0);
+
+      const newAfter = data?.data?.after;
+      
+      if (isCustom) {
+        setCustomAfterId(newAfter);
+        setCustomHasMore(!!newAfter && vids.length > 0);
+      } else {
+        setAfterId(newAfter);
+        setHasMore(!!newAfter && vids.length > 0);
+      }
+      
       setVideos(prev => isNewSubreddit ? vids : [...prev, ...vids]);
     } catch (err) {
-      console.error('Error fetching videos:', err);
-      setError('Failed to load videos. Please try again later.');
+      setError('Failed to load videos.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Intersection Observer for infinite scroll in main gallery
-  useEffect(() => {
-    let currentObserver = null;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (
-          entries[0].isIntersecting &&
-          ((usingCustomSubreddit ? customHasMore : hasMore)) &&
-          !isLoading &&
-          (usingCustomSubreddit ? customSubreddit.trim() : selectedSubreddit)
-        ) {
-          fetchVideos();
-        }
-      },
-      { 
-        threshold: 0.1,
-        rootMargin: '200px'
-      }
-    );
-    if (loadingRef.current) {
-      currentObserver = loadingRef.current;
-      observer.observe(loadingRef.current);
-    }
-    return () => {
-      if (currentObserver) {
-        observer.unobserve(currentObserver);
-      }
-    };
-  }, [hasMore, customHasMore, isLoading, afterId, customAfterId, selectedSubreddit, customSubreddit, usingCustomSubreddit]);
+  const fetchImages = async (isNewSubreddit = false) => {
+    const isCustom = imageGalleryUsingCustomSubreddit;
+    const sub = isCustom ? imageGalleryCustomSubreddit.trim() : imageGallerySelectedSubreddit;
+    const after = isCustom ? (isNewSubreddit ? '' : imageGalleryCustomAfterId) : (isNewSubreddit ? '' : imageGalleryAfterId);
+    const hasMoreCheck = isCustom ? (isNewSubreddit || imageGalleryCustomHasMore) : (isNewSubreddit || imageGalleryHasMore);
 
-  // When switching between default and custom subreddit, reset state
-  useEffect(() => {
-    if (usingCustomSubreddit) {
-      setVideos([]);
-      setCustomAfterId(null);
-      setCustomHasMore(true);
-      fetchVideos(true);
-    } else if (selectedSubreddit) {
-      setVideos([]);
-      setAfterId(null);
-      setHasMore(true);
-      fetchVideos(true);
-    }
-    // eslint-disable-next-line
-  }, [selectedSubreddit, usingCustomSubreddit]);
+    if (!sub || !hasMoreCheck) return;
 
-  useEffect(() => {
-    // Fetch sizes for all videos if the filter is enabled and sizes are missing (only in gallery tab)
-    if (activeTab === 'gallery' && showUnder10MB && videos.length > 0) {
-      const missing = videos.filter(v => videoSizes[v.id] === undefined);
-      if (missing.length > 0) {
-        setFetchingSizes(true);
-        Promise.all(
-          missing.map(async (v) => {
-            try {
-              const res = await fetch(v.url, { method: 'HEAD' });
-              const size = res.headers.get('Content-Length');
-              return { id: v.id, size: size ? parseInt(size, 10) : null };
-            } catch {
-              return { id: v.id, size: null };
-            }
-          })
-        ).then(results => {
-          setVideoSizes(prev => {
-            const next = { ...prev };
-            results.forEach(({ id, size }) => { next[id] = size; });
-            return next;
-          });
-          setFetchingSizes(false);
-        });
+    try {
+      setImageGalleryIsLoading(true);
+      setImageGalleryError(null);
+      const url = `${BACKEND_API_URL}/api/reddit/${sub}${after ? `?after=${after}` : ''}`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Failed to fetch');
+      const data = await response.json();
+      
+      const imgs = (data?.data?.children || [])
+        .map(post => post?.data)
+        .filter(p => p?.post_hint === 'image' && p?.url && /\.(jpg|jpeg|png|gif)$/i.test(p.url))
+        .map(p => ({
+          id: p.id,
+          title: p.title,
+          url: p.url,
+          thumbnail: p.thumbnail?.startsWith('http') ? p.thumbnail : p.url,
+          subreddit: sub
+        }));
+
+      const newAfter = data?.data?.after;
+      
+      if (isCustom) {
+        setImageGalleryCustomAfterId(newAfter);
+        setImageGalleryCustomHasMore(!!newAfter && imgs.length > 0);
+      } else {
+        setImageGalleryAfterId(newAfter);
+        setImageGalleryHasMore(!!newAfter && imgs.length > 0);
       }
+      
+      setImageGalleryImages(prev => isNewSubreddit ? imgs : [...prev, ...imgs]);
+    } catch (err) {
+      setImageGalleryError('Failed to load images.');
+    } finally {
+      setImageGalleryIsLoading(false);
     }
-  }, [showUnder10MB, videos, activeTab]);
-
-  const handleSubredditChange = (event) => {
-    setSelectedSubreddit(event.target.value);
   };
 
-  const handleVideoMouseEnter = (videoId) => {
-    if (!clickedVideos.has(videoId)) {
-      setPlayingVideos(prev => new Set([...prev, videoId]));
-      videoRefs.current[videoId]?.play().catch(err => console.warn('Playback failed:', err));
+  useEffect(() => {
+    if (activeTab === 'gallery') {
+      if (usingCustomSubreddit) {
+        if (customSubreddit) fetchVideos(true);
+      } else if (selectedSubreddit) {
+        fetchVideos(true);
+      }
     }
+  }, [selectedSubreddit, usingCustomSubreddit, activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'image-gallery') {
+      if (imageGalleryUsingCustomSubreddit) {
+        if (imageGalleryCustomSubreddit) fetchImages(true);
+      } else if (imageGallerySelectedSubreddit) {
+        fetchImages(true);
+      }
+    }
+  }, [imageGallerySelectedSubreddit, imageGalleryUsingCustomSubreddit, activeTab]);
+
+  // Infinite Scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          if (activeTab === 'gallery' && !isLoading) fetchVideos();
+          if (activeTab === 'image-gallery' && !imageGalleryIsLoading) fetchImages();
+        }
+      },
+      { threshold: 0.1, rootMargin: '200px' }
+    );
+    
+    if (activeTab === 'gallery' && loadingRef.current) observer.observe(loadingRef.current);
+    if (activeTab === 'image-gallery' && imageGalleryLoadingRef.current) observer.observe(imageGalleryLoadingRef.current);
+    
+    return () => observer.disconnect();
+  }, [isLoading, imageGalleryIsLoading, activeTab, hasMore, customHasMore, imageGalleryHasMore, imageGalleryCustomHasMore]);
+
+  // Auth
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleVideoMouseEnter = (videoId) => {
+    setPlayingVideos(prev => new Set([...prev, videoId]));
+    videoRefs.current[videoId]?.play().catch(() => {});
   };
 
   const handleVideoMouseLeave = (videoId) => {
-    if (!clickedVideos.has(videoId)) {
-      setPlayingVideos(prev => {
-        const next = new Set([...prev]);
-        next.delete(videoId);
-        return next;
-      });
-      videoRefs.current[videoId]?.pause();
-    }
-  };
-
-  const handleVideoClick = (video) => {
-    setSelectedVideo(video);
-  };
-
-  const handleVideoLoadStart = (videoId) => {
-    setLoadingVideos(prev => new Set([...prev, videoId]));
-  };
-
-  const handleVideoCanPlay = (videoId) => {
-    setLoadingVideos(prev => {
+    setPlayingVideos(prev => {
       const next = new Set([...prev]);
       next.delete(videoId);
       return next;
     });
+    videoRefs.current[videoId]?.pause();
   };
 
-  const handleFavoriteClick = async (video) => {
+  const handleFavoriteClick = async (e, video) => {
+    e.stopPropagation();
     if (isFavorite(video.id)) {
       await removeFavorite(video.id);
     } else {
-      await addFavorite({
-        ...video,
-        subreddit: selectedSubreddit
-      });
+      await addFavorite({ ...video, subreddit: selectedSubreddit });
     }
   };
 
-  const handleDownload = async (video) => {
+  const handleDownload = async (e, item) => {
+    e.stopPropagation();
     try {
-      const response = await fetch(video.url);
+      const response = await fetch(item.url);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${video.title}.mp4`;
+      a.download = `${item.title.slice(0, 20)}.${item.url.split('.').pop()}`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
-      console.error('Download failed:', error);
+      window.open(item.url, '_blank');
     }
   };
 
-  const fetchFromCustomSubreddit = async (isNew = false) => {
-    if (!customSubreddit.trim()) return;
-    setIsLoading(true);
-    setError(null);
-    setUsingCustomSubreddit(true);
-    try {
-      const after = isNew ? '' : customAfterId;
-      const url = `${BACKEND_API_URL}/api/reddit/${customSubreddit.trim()}${after ? `?after=${after}` : ''}`;
-      const response = await fetch(url);
-      if (!response.ok) throw new Error('Failed to fetch subreddit');
-      const data = await response.json();
-      // Extract videos from posts
-      const vids = (data?.data?.children || [])
-        .map(post => post?.data)
-        .filter(p =>
-          (p?.is_video && p?.media?.reddit_video?.fallback_url) ||
-          (p?.preview?.reddit_video_preview?.fallback_url)
-        )
-        .map(p => ({
-          id: p.id,
-          title: p.title,
-          url: p?.media?.reddit_video?.fallback_url || p?.preview?.reddit_video_preview?.fallback_url,
-          thumbnail: p?.preview?.images?.[0]?.source?.url?.replace(/&amp;/g, '&') || '',
-          subreddit: customSubreddit.trim()
-        }));
-      const newAfter = data?.data?.after;
-      setCustomAfterId(newAfter);
-      setCustomHasMore(!!newAfter && vids.length > 0);
-      setVideos(prev => isNew ? vids : [...prev, ...vids]);
-      if (isNew) setAfterId(null);
-    } catch (err) {
-      setError('Failed to load videos from subreddit.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Reset video states when changing subreddit
-  useEffect(() => {
-    setPlayingVideos(new Set());
-    setClickedVideos(new Set());
-  }, [selectedSubreddit]);
-
-  // Authentication effect
-  useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-    });
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  // Fetch available subreddits for images on mount
-  useEffect(() => {
-    const fetchImageSubreddits = async () => {
-      try {
-        const response = await fetch(`${BACKEND_API_URL}/api/subreddits`);
-        const data = await response.json();
-        setImageGalleryAvailableSubreddits(data.subreddits);
-        setImageGallerySelectedSubreddit(data.subreddits[0]);
-      } catch (err) {
-        setImageGalleryError('Failed to load subreddits');
-      }
-    };
-    fetchImageSubreddits();
-  }, [BACKEND_API_URL]);
-
-  // Fetch images from subreddit
-  const fetchImages = async (isNewSubreddit = false) => {
-    if (!imageGallerySelectedSubreddit || (!isNewSubreddit && !imageGalleryHasMore)) return;
-    try {
-      setImageGalleryIsLoading(true);
-      setImageGalleryError(null);
-      const response = await fetch(`${BACKEND_API_URL}/api/reddit/${imageGallerySelectedSubreddit}${imageGalleryAfterId && !isNewSubreddit ? `?after=${imageGalleryAfterId}` : ''}`);
-      if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-      const data = await response.json();
-      // Extract images from posts
-      const imgs = (data?.data?.children || [])
-        .map(post => post?.data)
-        .filter(p => p?.post_hint === 'image' && p?.url && (p?.url.endsWith('.jpg') || p?.url.endsWith('.png') || p?.url.endsWith('.jpeg') || p?.url.endsWith('.gif')))
-        .map(p => ({
-          id: p.id,
-          title: p.title,
-          url: p.url,
-          thumbnail: p.thumbnail && p.thumbnail.startsWith('http') ? p.thumbnail : p.url,
-          subreddit: imageGallerySelectedSubreddit
-        }));
-      const newAfterId = data.data.after;
-      setImageGalleryAfterId(newAfterId);
-      setImageGalleryHasMore(!!newAfterId && imgs.length > 0);
-      setImageGalleryImages(prev => isNewSubreddit ? imgs : [...prev, ...imgs]);
-    } catch (err) {
-      setImageGalleryError('Failed to load images. Please try again later.');
-    } finally {
-      setImageGalleryIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (imageGallerySelectedSubreddit) {
-      setImageGalleryImages([]);
-      setImageGalleryAfterId(null);
-      setImageGalleryHasMore(true);
-      fetchImages(true);
-    }
-  }, [imageGallerySelectedSubreddit]);
-
-  // Infinite scroll for image gallery
-  useEffect(() => {
-    let currentObserver = null;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && imageGalleryHasMore && !imageGalleryIsLoading && imageGallerySelectedSubreddit) {
-          fetchImages();
-        }
-      },
-      {
-        threshold: 0.1,
-        rootMargin: '200px'
-      }
-    );
-    if (imageGalleryLoadingRef.current) {
-      currentObserver = imageGalleryLoadingRef.current;
-      observer.observe(imageGalleryLoadingRef.current);
-    }
-    return () => {
-      if (currentObserver) {
-        observer.unobserve(currentObserver);
-      }
-    };
-  }, [imageGalleryHasMore, imageGalleryIsLoading, imageGalleryAfterId, imageGallerySelectedSubreddit]);
-
-  // Custom subreddit fetch for images
-  const fetchImagesFromCustomSubreddit = async (isNew = false) => {
-    if (!imageGalleryCustomSubreddit.trim()) return;
-    setImageGalleryIsLoading(true);
-    setImageGalleryError(null);
-    setImageGalleryUsingCustomSubreddit(true);
-    try {
-      const after = isNew ? '' : imageGalleryCustomAfterId;
-      const url = `${BACKEND_API_URL}/api/reddit/${imageGalleryCustomSubreddit.trim()}${after ? `?after=${after}` : ''}`;
-      const response = await fetch(url);
-      if (!response.ok) throw new Error('Failed to fetch subreddit');
-      const data = await response.json();
-      const imgs = (data?.data?.children || [])
-        .map(post => post?.data)
-        .filter(p => p?.post_hint === 'image' && p?.url && (p?.url.endsWith('.jpg') || p?.url.endsWith('.png') || p?.url.endsWith('.jpeg') || p?.url.endsWith('.gif')))
-        .map(p => ({
-          id: p.id,
-          title: p.title,
-          url: p.url,
-          thumbnail: p.thumbnail && p.thumbnail.startsWith('http') ? p.thumbnail : p.url,
-          subreddit: imageGalleryCustomSubreddit.trim()
-        }));
-      const newAfter = data?.data?.after;
-      setImageGalleryCustomAfterId(newAfter);
-      setImageGalleryCustomHasMore(!!newAfter && imgs.length > 0);
-      setImageGalleryImages(prev => isNew ? imgs : [...prev, ...imgs]);
-      if (isNew) setImageGalleryAfterId(null);
-    } catch (err) {
-      setImageGalleryError('Failed to load images from subreddit.');
-    } finally {
-      setImageGalleryIsLoading(false);
-    }
-  };
-
-  // Download handler for images
-  const handleImageDownload = async (img) => {
-    const sanitize = (str) => str.replace(/[^a-z0-9\-_. ]/gi, '_').slice(0, 80);
-    const isRedditImage = /^(https?:\/\/(i|preview)\.redd\.it\/)/.test(img.url);
-    try {
-      let downloadUrl = img.url;
-      if (isRedditImage) {
-        // Use backend proxy for Reddit images
-        downloadUrl = `${BACKEND_API_URL}/api/proxy-image?url=${encodeURIComponent(img.url)}`;
-      }
-      // Download via anchor
-      const ext = img.url.split('.').pop().split('?')[0];
-      const a = document.createElement('a');
-      a.href = downloadUrl;
-      a.download = `${sanitize(img.title || 'image')}.${ext}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    } catch (error) {
-      // As a last resort, open the image in a new tab
-      window.open(img.url, '_blank');
-      console.error('Download failed:', error);
-    }
-  };
-
-  const breakpointColumns = {
-    default: 4,
-    1440: 3,
-    1100: 2,
-    700: 1
-  };
-
-  if (!session) {
-    return <Auth />;
-  }
+  if (!session) return <Auth />;
 
   if (!consentGiven) {
     return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'linear-gradient(to bottom, #0f0f0f, #1a1a1a)',
-        color: '#fff',
-        padding: '2rem',
-        textAlign: 'center',
-      }}>
-        <h1 style={{ fontSize: '2rem', marginBottom: '1.5rem', background: 'linear-gradient(120deg, #646cff, #8f96ff)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Reddit Reels - Consent Required</h1>
-        <p style={{ fontSize: '1.1rem', marginBottom: '2rem', maxWidth: 500 }}>
-          This site contains user-generated video content from Reddit, which may include adult or sensitive material. By continuing, you confirm that you are at least 18 years old and consent to viewing such content.
-        </p>
-        <button
-          style={{
-            padding: '1rem 2rem',
-            borderRadius: 12,
-            background: '#646cff',
-            color: '#fff',
-            fontSize: '1.1rem',
-            border: 'none',
-            cursor: 'pointer',
-            fontWeight: 600,
-            marginBottom: '1rem',
-          }}
-          onClick={() => {
-            localStorage.setItem('reddit-reels-consent', 'true');
-            setConsentGiven(true);
-          }}
-        >
-          I am 18+ and consent
-        </button>
-        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.95rem' }}>
-          If you do not consent, please close this page.
-        </p>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-black text-white p-8 text-center relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--color-neon-pink)_0%,_transparent_50%)] opacity-10 blur-3xl"></div>
+        <div className="relative z-10 glass-panel p-12 rounded-3xl max-w-lg">
+          <h1 className="text-5xl font-bold mb-6 text-transparent bg-clip-text bg-gradient-to-r from-white to-neon-pink text-glow">NSFW Warning</h1>
+          <p className="text-xl mb-8 text-neutral-300 leading-relaxed">
+            This gallery contains user-generated content that may be NSFW. 
+            <br/>By entering, you confirm you are 18+.
+          </p>
+          <button
+            className="px-10 py-4 rounded-full bg-neon-pink hover:bg-red-600 text-white text-lg font-bold shadow-[0_0_20px_rgba(255,47,86,0.4)] hover:shadow-[0_0_40px_rgba(255,47,86,0.6)] hover:scale-105 transition-all duration-300 cursor-pointer"
+            onClick={() => {
+              localStorage.setItem('reddit-reels-consent', 'true');
+              setConsentGiven(true);
+            }}
+          >
+            I Accept & Enter
+          </button>
+        </div>
       </div>
     );
   }
 
-  const filteredVideos = activeTab === 'gallery' && showUnder10MB
-    ? videos.filter(v => videoSizes[v.id] !== undefined && videoSizes[v.id] !== null && videoSizes[v.id] < 10 * 1024 * 1024)
-    : videos;
+  const breakpointColumns = { default: 4, 1440: 3, 1100: 2, 700: 1 };
 
   return (
-    <div className="container">
-      <header className="app-header">
-        <div className="header-content">
-          <h1>Reddit Reels</h1>
-          <nav className="main-nav">
-            <button 
-              className={`nav-button ${activeTab === 'gallery' ? 'active' : ''}`}
-              onClick={() => setActiveTab('gallery')}
-            >
-              Gallery
-            </button>
-            <button 
-              className={`nav-button ${activeTab === 'image-gallery' ? 'active' : ''}`}
-              onClick={() => setActiveTab('image-gallery')}
-            >
-              Image Gallery
-            </button>
-            <button 
-              className={`nav-button ${activeTab === 'reels' ? 'active' : ''}`}
-              onClick={() => setActiveTab('reels')}
-            >
-              Reels
-            </button>
-            <button 
-              className={`nav-button ${activeTab === 'favorites' ? 'active' : ''}`}
-              onClick={() => setActiveTab('favorites')}
-            >
-              Favorites
-            </button>
-            <button 
-              className={`nav-button ${activeTab === 'profile' ? 'active' : ''}`}
-              onClick={() => setActiveTab('profile')}
-            >
-              Profile
-            </button>
-            <button 
-              className="sign-out-button" 
-              onClick={() => supabase.auth.signOut()}
-            >
-              Sign Out
-            </button>
+    <div className="min-h-screen text-white pb-20">
+      {/* Header */}
+      <header className="sticky top-0 z-50 glass-panel border-b-0 rounded-none mb-8">
+        <div className="max-w-[1800px] mx-auto px-6 h-20 flex items-center justify-between">
+          <h1 className="text-3xl font-black tracking-tighter italic bg-clip-text text-transparent bg-gradient-to-r from-white via-neon-blue to-neon-pink drop-shadow-[0_0_10px_rgba(0,243,255,0.3)]">
+            REDDIT REELS
+          </h1>
+          
+          <nav className="hidden md:flex items-center gap-2 bg-black/20 p-1.5 rounded-full border border-white/5 backdrop-blur-md">
+            {[
+              { id: 'gallery', label: 'Videos' },
+              { id: 'image-gallery', label: 'Images' },
+              { id: 'reels', label: 'Reels' },
+              { id: 'favorites', label: 'Favorites' },
+              { id: 'profile', label: 'Profile' }
+            ].map(tab => (
+              <button 
+                key={tab.id}
+                className={`px-6 py-2.5 rounded-full text-sm font-bold transition-all duration-300 cursor-pointer ${
+                  activeTab === tab.id 
+                    ? 'bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.3)]' 
+                    : 'text-neutral-400 hover:text-white hover:bg-white/5'
+                }`}
+                onClick={() => setActiveTab(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
           </nav>
-          {/* Hamburger for mobile */}
-          <button
-            className={`hamburger${mobileNavOpen ? ' active' : ''}`}
-            aria-label="Open navigation menu"
-            onClick={() => setMobileNavOpen((open) => !open)}
-            style={{ background: 'none', border: 'none', padding: 0 }}
-          >
-            <span></span>
-            <span></span>
-            <span></span>
-          </button>
-        </div>
-        {/* Mobile nav overlay */}
-        <div className={`mobile-nav${mobileNavOpen ? ' open' : ''}`}
-          onClick={() => setMobileNavOpen(false)}
-        >
+
           <button 
-            className={`nav-button${activeTab === 'gallery' ? ' active' : ''}`}
-            onClick={e => { e.stopPropagation(); setActiveTab('gallery'); setMobileNavOpen(false); }}
-          >
-            Gallery
-          </button>
-          <button 
-            className={`nav-button${activeTab === 'image-gallery' ? ' active' : ''}`}
-            onClick={e => { e.stopPropagation(); setActiveTab('image-gallery'); setMobileNavOpen(false); }}
-          >
-            Image Gallery
-          </button>
-          <button 
-            className={`nav-button${activeTab === 'reels' ? ' active' : ''}`}
-            onClick={e => { e.stopPropagation(); setActiveTab('reels'); setMobileNavOpen(false); }}
-          >
-            Reels
-          </button>
-          <button 
-            className={`nav-button${activeTab === 'favorites' ? ' active' : ''}`}
-            onClick={e => { e.stopPropagation(); setActiveTab('favorites'); setMobileNavOpen(false); }}
-          >
-            Favorites
-          </button>
-          <button 
-            className={`nav-button${activeTab === 'profile' ? ' active' : ''}`}
-            onClick={e => { e.stopPropagation(); setActiveTab('profile'); setMobileNavOpen(false); }}
-          >
-            Profile
-          </button>
-          <button 
-            className="sign-out-button"
-            onClick={e => { e.stopPropagation(); supabase.auth.signOut(); setMobileNavOpen(false); }}
+            className="hidden md:block px-6 py-2.5 rounded-full border border-white/20 text-white font-medium hover:bg-white/10 transition-all cursor-pointer" 
+            onClick={() => supabase.auth.signOut()}
           >
             Sign Out
+          </button>
+          
+          <button className="md:hidden text-white" onClick={() => setMobileNavOpen(!mobileNavOpen)}>
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
           </button>
         </div>
       </header>
 
-      <main className="main-content">
-        {activeTab === 'gallery' && (
-          <>
-            <div className="subreddit-selector">
-              <div className="select-wrapper">
-                <select 
-                  value={selectedSubreddit} 
-                  onChange={handleSubredditChange}
-                  className="subreddit-select"
-                  disabled={usingCustomSubreddit}
-                >
-                  <option value="">Choose Subreddit</option>
-                  {availableSubreddits.map(sub => (
-                    <option key={sub} value={sub}>r/{sub}</option>
-                  ))}
-                </select>
-                <span className="select-icon">▼</span>
-              </div>
-            </div>
-            {/* Custom subreddit input */}
-            <div style={{ margin: '0 0 12px 0', display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
+      {/* Mobile Nav */}
+      {mobileNavOpen && (
+        <div className="fixed inset-0 z-40 bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center gap-8 md:hidden" onClick={() => setMobileNavOpen(false)}>
+          {['gallery', 'image-gallery', 'reels', 'favorites', 'profile'].map(tab => (
+            <button key={tab} className="text-2xl font-bold capitalize text-white" onClick={() => setActiveTab(tab)}>{tab.replace('-', ' ')}</button>
+          ))}
+          <button className="text-xl text-red-500 font-bold" onClick={() => supabase.auth.signOut()}>Sign Out</button>
+        </div>
+      )}
+
+      <main className="max-w-[1800px] mx-auto px-4 md:px-8">
+        {(activeTab === 'gallery' || activeTab === 'image-gallery') && (
+          <div className="flex flex-col items-center gap-6 mb-12 sticky top-24 z-30 pointer-events-none">
+            <div className="pointer-events-auto flex gap-4 bg-black/60 backdrop-blur-xl p-2 rounded-2xl border border-white/10 shadow-2xl">
+              <select 
+                value={activeTab === 'gallery' ? (usingCustomSubreddit ? '' : selectedSubreddit) : (imageGalleryUsingCustomSubreddit ? '' : imageGallerySelectedSubreddit)}
+                onChange={(e) => {
+                  if (activeTab === 'gallery') {
+                    setUsingCustomSubreddit(false);
+                    setSelectedSubreddit(e.target.value);
+                  } else {
+                    setImageGalleryUsingCustomSubreddit(false);
+                    setImageGallerySelectedSubreddit(e.target.value);
+                  }
+                }}
+                className="bg-transparent text-white font-bold px-4 py-2 outline-none cursor-pointer"
+              >
+                <option value="" className="bg-black">Select Subreddit</option>
+                {availableSubreddits.map(sub => (
+                  <option key={sub} value={sub} className="bg-black">r/{sub}</option>
+                ))}
+              </select>
+              
+              <div className="w-px bg-white/20"></div>
+
               <input
                 type="text"
-                placeholder="Enter subreddit (no r/)"
-                value={customSubreddit}
-                onChange={e => setCustomSubreddit(e.target.value)}
-                style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #646cff', fontSize: 15, width: 180 }}
-                onKeyDown={e => { if (e.key === 'Enter') fetchFromCustomSubreddit(true); }}
-                disabled={isLoading}
+                placeholder="Custom r/..."
+                value={activeTab === 'gallery' ? customSubreddit : imageGalleryCustomSubreddit}
+                onChange={(e) => activeTab === 'gallery' ? setCustomSubreddit(e.target.value) : setImageGalleryCustomSubreddit(e.target.value)}
+                className="bg-transparent text-white px-4 py-2 outline-none w-32 focus:w-48 transition-all"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    if (activeTab === 'gallery') {
+                      setUsingCustomSubreddit(true);
+                      fetchVideos(true);
+                    } else {
+                      setImageGalleryUsingCustomSubreddit(true);
+                      fetchImages(true);
+                    }
+                  }
+                }}
               />
-              <button
-                onClick={() => fetchFromCustomSubreddit(true)}
-                style={{ padding: '8px 16px', borderRadius: 8, background: '#646cff', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 15 }}
-                disabled={isLoading}
+              
+              <button 
+                onClick={() => {
+                   if (activeTab === 'gallery') {
+                      setUsingCustomSubreddit(true);
+                      fetchVideos(true);
+                    } else {
+                      setImageGalleryUsingCustomSubreddit(true);
+                      fetchImages(true);
+                    }
+                }}
+                className="bg-white/10 hover:bg-white/20 px-4 rounded-xl text-sm font-bold transition-colors cursor-pointer"
               >
-                Fetch
+                GO
               </button>
-              {usingCustomSubreddit && (
-                <button
-                  onClick={() => { setUsingCustomSubreddit(false); setCustomSubreddit(''); setVideos([]); setAfterId(null); setCustomAfterId(null); setCustomHasMore(true); setHasMore(true); setError(null); setIsLoading(true); setSelectedSubreddit(availableSubreddits[0]); }}
-                  style={{ padding: '8px 12px', borderRadius: 8, background: '#232347', color: '#fff', border: 'none', fontWeight: 500, cursor: 'pointer', fontSize: 14 }}
-                >
-                  Reset
-                </button>
-              )}
             </div>
-            {/* Filter Switch UI */}
-            <div style={{ margin: '16px 0 8px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <label style={{ color: '#fff', fontSize: 16, fontWeight: 500, cursor: 'pointer', userSelect: 'none' }}>
-                <input
-                  type="checkbox"
-                  checked={showUnder10MB}
-                  onChange={e => setShowUnder10MB(e.target.checked)}
-                  style={{ marginRight: 8 }}
-                />
-                Show only videos under 10MB
-              </label>
-              {fetchingSizes && (
-                <span style={{ color: '#fff', fontSize: 14, marginLeft: 8 }}>Checking sizes...</span>
-              )}
-            </div>
-            {error && (
-              <div className="error-container">
-                <svg className="error-icon" viewBox="0 0 24 24" width="24" height="24">
-                  <path fill="currentColor" d="M12 4c4.4 0 8 3.6 8 8s-3.6 8-8 8-8-3.6-8-8 3.6-8 8-8zm0-2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm1 13h-2v2h2v-2zm0-8h-2v6h2V7z"/>
-                </svg>
-                <p>{error}</p>
-              </div>
-            )}
+          </div>
+        )}
 
-            <Masonry
-              breakpointCols={breakpointColumns}
-              className="masonry-grid"
-              columnClassName="masonry-grid_column"
-            >
-              {filteredVideos.map(vid => (
+        {activeTab === 'gallery' && (
+          <>
+            <Masonry breakpointCols={breakpointColumns} className="flex w-auto -ml-6" columnClassName="pl-6 bg-clip-padding">
+              {videos.map(vid => (
                 <div 
                   key={vid.id} 
-                  className={`card ${loadingVideos.has(vid.id) ? 'loading' : ''}`}
+                  className="group relative mb-6 bg-dark-card rounded-2xl overflow-hidden border border-white/5 shadow-lg transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_10px_40px_rgba(0,0,0,0.5)] hover:border-white/20 cursor-pointer"
                   onMouseEnter={() => handleVideoMouseEnter(vid.id)}
                   onMouseLeave={() => handleVideoMouseLeave(vid.id)}
+                  onClick={() => setSelectedVideo(vid)}
                 >
-                  {loadingVideos.has(vid.id) && (
-                    <div className="video-loading-overlay">
-                      <div className="loading-spinner"></div>
-                    </div>
-                  )}
-                  <div className="card-actions">
-                    <button 
-                      className={`favorite-button ${isFavorite(vid.id) ? 'active' : ''}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleFavoriteClick(vid);
-                      }}
-                    >
-                      <svg viewBox="0 0 24 24" width="24" height="24">
-                        <path fill="currentColor" d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-                      </svg>
-                    </button>
-                    {/* Download button below like button */}
-                    <button
-                      className="download-button"
-                      style={{ marginTop: 8, width: '100%', background: '#232347', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 0', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDownload(vid);
-                      }}
-                    >
-                      <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" strokeWidth="2" fill="none" style={{ marginRight: 4 }}>
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                        <polyline points="7 10 12 15 17 10" />
-                        <line x1="12" y1="15" x2="12" y2="3" />
-                      </svg>
-                      Download
-                    </button>
-                  </div>
-                  <div className="video-container" style={{ position: 'relative', width: '100%' }}>
-                    <img
-                      src={vid.thumbnail}
-                      alt={vid.title}
-                      style={{ 
-                        width: '100%', 
-                        height: '100%',
-                        borderRadius: '10px',
-                        cursor: 'pointer',
-                        objectFit: 'cover'
-                      }}
-                      onClick={() => handleVideoClick(vid)}
+                  <div className="relative aspect-[9/16] bg-black">
+                    <video
+                      ref={el => videoRefs.current[vid.id] = el}
+                      src={vid.url}
+                      poster={vid.thumbnail}
+                      loop
+                      muted
+                      playsInline
+                      className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-500"
                     />
-                    <div className="play-overlay" 
-                      style={{
-                        position: 'absolute',
-                        top: '50%',
-                        left: '50%',
-                        transform: 'translate(-50%, -50%)',
-                        color: 'white',
-                        fontSize: '48px',
-                        opacity: '0.8'
-                      }}
-                    >
-                      ▶
+                    
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity duration-300"></div>
+                    
+                    <div className="absolute top-3 right-3 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
+                      <button 
+                        className={`w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md border transition-all duration-300 ${isFavorite(vid.id) ? 'bg-neon-pink/20 border-neon-pink text-neon-pink' : 'bg-black/50 border-white/10 text-white hover:bg-white/20'}`}
+                        onClick={(e) => handleFavoriteClick(e, vid)}
+                      >
+                        <svg className={`w-5 h-5 ${isFavorite(vid.id) ? 'fill-current' : ''}`} viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" fill="none"><path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+                      </button>
+                      <button 
+                        className="w-10 h-10 rounded-full flex items-center justify-center bg-black/50 backdrop-blur-md border border-white/10 text-white hover:bg-white/20 transition-all duration-300"
+                        onClick={(e) => handleDownload(e, vid)}
+                      >
+                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                      </button>
+                    </div>
+
+                    <div className="absolute bottom-0 left-0 right-0 p-5 translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
+                      <h3 className="text-sm font-bold text-white line-clamp-2 leading-relaxed drop-shadow-md">{vid.title}</h3>
                     </div>
                   </div>
-                  <h3 className="video-title">{vid.title}</h3>
                 </div>
               ))}
             </Masonry>
-              <div ref={loadingRef} className="loading-indicator">
-              {isLoading && ((usingCustomSubreddit ? customHasMore : hasMore)) && (
-                <div className="loading-animation">
-                  <div className="loading-dot"></div>
-                  <div className="loading-dot"></div>
-                  <div className="loading-dot"></div>
-                </div>
-              )}
-              {(!(usingCustomSubreddit ? customHasMore : hasMore) && filteredVideos.length > 0) && (
-                <div className="end-message">
-                  <span>You've reached the end</span>
-                  <div className="end-line"></div>
-                </div>
-              )}
-              {(!isLoading && filteredVideos.length === 0) && (
-                <div className="empty-message">
-                  <span>No videos found</span>
-                </div>
-              )}
+            <div ref={loadingRef} className="h-20 flex items-center justify-center">
+              {isLoading && <div className="w-8 h-8 border-4 border-neon-pink border-t-transparent rounded-full animate-spin"></div>}
             </div>
           </>
         )}
 
         {activeTab === 'image-gallery' && (
           <>
-            <div className="subreddit-selector">
-              <div className="select-wrapper">
-                <select 
-                  value={imageGallerySelectedSubreddit} 
-                  onChange={e => setImageGallerySelectedSubreddit(e.target.value)}
-                  className="subreddit-select"
-                  disabled={imageGalleryUsingCustomSubreddit}
-                >
-                  <option value="">Choose Subreddit</option>
-                  {imageGalleryAvailableSubreddits.map(sub => (
-                    <option key={sub} value={sub}>r/{sub}</option>
-                  ))}
-                </select>
-                <span className="select-icon">▼</span>
-              </div>
-            </div>
-            {/* Custom subreddit input */}
-            <div style={{ margin: '0 0 12px 0', display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
-              <input
-                type="text"
-                placeholder="Enter subreddit (no r/)"
-                value={imageGalleryCustomSubreddit}
-                onChange={e => setImageGalleryCustomSubreddit(e.target.value)}
-                style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #646cff', fontSize: 15, width: 180 }}
-                onKeyDown={e => { if (e.key === 'Enter') fetchImagesFromCustomSubreddit(true); }}
-                disabled={imageGalleryIsLoading}
-              />
-              <button
-                onClick={() => fetchImagesFromCustomSubreddit(true)}
-                style={{ padding: '8px 16px', borderRadius: 8, background: '#646cff', color: '#fff', border: 'none', fontWeight: 600, cursor: 'pointer', fontSize: 15 }}
-                disabled={imageGalleryIsLoading}
-              >
-                Fetch
-              </button>
-              {imageGalleryUsingCustomSubreddit && (
-                <button
-                  onClick={() => { setImageGalleryUsingCustomSubreddit(false); setImageGalleryCustomSubreddit(''); setImageGalleryImages([]); setImageGalleryAfterId(null); setImageGalleryCustomAfterId(null); setImageGalleryCustomHasMore(true); setImageGalleryHasMore(true); setImageGalleryError(null); setImageGalleryIsLoading(true); setImageGallerySelectedSubreddit(imageGalleryAvailableSubreddits[0]); }}
-                  style={{ padding: '8px 12px', borderRadius: 8, background: '#232347', color: '#fff', border: 'none', fontWeight: 500, cursor: 'pointer', fontSize: 14 }}
-                >
-                  Reset
-                </button>
-              )}
-            </div>
-            {imageGalleryError && (
-              <div className="error-container">
-                <svg className="error-icon" viewBox="0 0 24 24" width="24" height="24">
-                  <path fill="currentColor" d="M12 4c4.4 0 8 3.6 8 8s-3.6 8-8 8-8-3.6-8-8 3.6-8 8-8zm0-2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm1 13h-2v2h2v-2zm0-8h-2v6h2V7z"/>
-                </svg>
-                <p>{imageGalleryError}</p>
-              </div>
-            )}
-            <Masonry
-              breakpointCols={breakpointColumns}
-              className="masonry-grid"
-              columnClassName="masonry-grid_column"
-            >
+            <Masonry breakpointCols={breakpointColumns} className="flex w-auto -ml-6" columnClassName="pl-6 bg-clip-padding">
               {imageGalleryImages.map(img => (
-                <div key={img.id} className="card">
-                  <div className="image-container" style={{ position: 'relative', width: '100%' }}>
-                    <img
-                      src={img.url}
+                <div 
+                  key={img.id} 
+                  className="group relative mb-6 bg-dark-card rounded-2xl overflow-hidden border border-white/5 shadow-lg transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_10px_40px_rgba(0,0,0,0.5)] hover:border-white/20"
+                >
+                  <div className="relative">
+                    <img 
+                      src={img.url} 
                       alt={img.title}
-                      style={{ 
-                        width: '100%', 
-                        height: '100%',
-                        borderRadius: '10px',
-                        cursor: 'pointer',
-                        objectFit: 'cover'
-                      }}
-                      onClick={() => handleImageDownload(img)}
+                      className="w-full h-auto object-cover"
+                      loading="lazy"
                     />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-0 group-hover:opacity-60 transition-opacity duration-300"></div>
+                    
+                    <div className="absolute top-3 right-3 z-20 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                      <button 
+                        className="w-10 h-10 rounded-full flex items-center justify-center bg-black/50 backdrop-blur-md border border-white/10 text-white hover:bg-white/20 transition-all duration-300"
+                        onClick={(e) => handleDownload(e, img)}
+                      >
+                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                      </button>
+                    </div>
+
+                    <div className="absolute bottom-0 left-0 right-0 p-5 translate-y-2 opacity-0 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300">
+                      <h3 className="text-sm font-bold text-white line-clamp-2 leading-relaxed drop-shadow-md">{img.title}</h3>
+                    </div>
                   </div>
-                  <div className="card-actions">
-                    <button
-                      className="download-button"
-                      style={{ marginTop: 8, width: '100%', background: '#232347', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 0', fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-                      onClick={e => {
-                        e.stopPropagation();
-                        handleImageDownload(img);
-                      }}
-                    >
-                      <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" strokeWidth="2" fill="none" style={{ marginRight: 4 }}>
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                        <polyline points="7 10 12 15 17 10" />
-                        <line x1="12" y1="15" x2="12" y2="3" />
-                      </svg>
-                      Download
-                    </button>
-                  </div>
-                  <h3 className="video-title">{img.title}</h3>
                 </div>
               ))}
             </Masonry>
-            <div ref={imageGalleryLoadingRef} className="loading-indicator">
-              {imageGalleryIsLoading && ((imageGalleryUsingCustomSubreddit ? imageGalleryCustomHasMore : imageGalleryHasMore)) && (
-                <div className="loading-animation">
-                  <div className="loading-dot"></div>
-                  <div className="loading-dot"></div>
-                  <div className="loading-dot"></div>
-                </div>
-              )}
-              {(!(imageGalleryUsingCustomSubreddit ? imageGalleryCustomHasMore : imageGalleryHasMore) && imageGalleryImages.length > 0) && (
-                <div className="end-message">
-                  <span>You've reached the end</span>
-                  <div className="end-line"></div>
-                </div>
-              )}
-              {(!imageGalleryIsLoading && imageGalleryImages.length === 0) && (
-                <div className="empty-message">
-                  <span>No images found</span>
-                </div>
-              )}
+            <div ref={imageGalleryLoadingRef} className="h-20 flex items-center justify-center">
+              {imageGalleryIsLoading && <div className="w-8 h-8 border-4 border-neon-blue border-t-transparent rounded-full animate-spin"></div>}
             </div>
           </>
         )}
 
-        {activeTab === 'reels' && (
-          <Reels availableSubreddits={availableSubreddits} />
-        )}
-
-        {activeTab === 'favorites' && (
-          <Favorites 
-            videoRefs={videoRefs}
-            handleVideoClick={handleVideoClick}
-            handleVideoMouseEnter={handleVideoMouseEnter}
-            handleVideoMouseLeave={handleVideoMouseLeave}
-          />
-        )}
-
-        {activeTab === 'profile' && (
-          <UserProfile session={session} />
-        )}
+        {activeTab === 'reels' && <Reels />}
+        {activeTab === 'favorites' && <Favorites />}
+        {activeTab === 'profile' && <UserProfile session={session} />}
       </main>
 
-      {selectedVideo && (
-        <VideoModal
-          video={selectedVideo}
-          onClose={() => setSelectedVideo(null)}
-        />
-      )}
+      {selectedVideo && <VideoModal video={selectedVideo} onClose={() => setSelectedVideo(null)} />}
     </div>
   );
 }
