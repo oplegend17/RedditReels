@@ -13,6 +13,13 @@ export default function Reels() {
   const [page, setPage] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
 
+  const calculateHeat = (ups) => {
+    if (ups > 5000) return 'nuclear';
+    if (ups > 1000) return 'fire';
+    if (ups > 500) return 'spicy';
+    return null;
+  };
+
   const fetchRandomReels = useCallback(async (pageNum = 1) => {
     try {
       if (pageNum === 1) setLoading(true);
@@ -24,7 +31,10 @@ export default function Reels() {
       if (data?.reels?.length) {
         setVideos(prev => {
           const ids = new Set(prev.map(v => v.id));
-          const newReels = data.reels.filter(v => !ids.has(v.id));
+          const newReels = data.reels.filter(v => !ids.has(v.id)).map(v => ({
+            ...v,
+            heat: calculateHeat(v.ups || Math.floor(Math.random() * 6000)) // Mock heat if missing
+          }));
           return [...prev, ...newReels];
         });
       }
@@ -81,6 +91,7 @@ export default function Reels() {
 
   const handleLike = async (e, video) => {
     e.stopPropagation();
+    // Add splash effect logic here if needed, but for now just function
     if (isFavorite(video.id)) {
       await removeFavorite(video.id);
     } else {
@@ -136,20 +147,22 @@ export default function Reels() {
               {/* Overlay Gradient */}
               <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/90 pointer-events-none" />
 
+              {/* Heat Badge */}
+              {video.heat && (
+                <div className={`absolute top-6 left-6 z-20 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider text-white shadow-lg ${
+                  video.heat === 'nuclear' ? 'badge-nuclear' : 
+                  video.heat === 'fire' ? 'badge-fire' : 'badge-spicy'
+                }`}>
+                  {video.heat === 'nuclear' ? '☢️ NUCLEAR' : video.heat === 'fire' ? '🔥🔥 FIRE' : '🌶️ SPICY'}
+                </div>
+              )}
+
               {/* Right Actions */}
               <div className="absolute right-4 bottom-28 flex flex-col gap-6 items-center z-20">
-                <button 
-                  className={`w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-md border transition-all duration-300 ${
-                    isFavorite(video.id) 
-                      ? 'bg-neon-pink/20 border-neon-pink text-neon-pink scale-110' 
-                      : 'bg-black/40 border-white/10 text-white hover:bg-white/10'
-                  }`}
-                  onClick={(e) => handleLike(e, video)}
-                >
-                  <svg className={`w-6 h-6 ${isFavorite(video.id) ? 'fill-current' : ''}`} viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" fill="none">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                  </svg>
-                </button>
+                <LikeButton 
+                  isLiked={isFavorite(video.id)} 
+                  onClick={(e) => handleLike(e, video)} 
+                />
                 
                 <button className="w-12 h-12 rounded-full flex items-center justify-center bg-black/40 backdrop-blur-md border border-white/10 text-white hover:bg-white/10">
                   <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
@@ -178,6 +191,32 @@ export default function Reels() {
         )}
       </div>
     </div>
+  );
+}
+
+function LikeButton({ isLiked, onClick }) {
+  const [isSplashing, setIsSplashing] = useState(false);
+
+  const handleClick = (e) => {
+    setIsSplashing(true);
+    setTimeout(() => setIsSplashing(false), 600);
+    onClick(e);
+  };
+
+  return (
+    <button 
+      className={`relative w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-md border transition-all duration-300 overflow-hidden ${
+        isLiked 
+          ? 'bg-neon-pink/20 border-neon-pink text-neon-pink scale-110' 
+          : 'bg-black/40 border-white/10 text-white hover:bg-white/10'
+      } ${isSplashing ? 'liquid-active' : ''}`}
+      onClick={handleClick}
+    >
+      <div className="liquid-splash"></div>
+      <svg className={`w-6 h-6 relative z-10 ${isLiked ? 'fill-current' : ''}`} viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" fill="none">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+      </svg>
+    </button>
   );
 }
 

@@ -58,4 +58,50 @@
   .text-glow {
     text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
   }
+
+  /* Liquid Splash Animation */
+  @keyframes splash {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.5); opacity: 0.5; }
+    100% { transform: scale(2); opacity: 0; }
+  }
+
+  .liquid-splash {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,47,86,0.8) 0%, rgba(255,47,86,0) 70%);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .liquid-active .liquid-splash {
+    animation: splash 0.6s ease-out forwards;
+  }
+
+  /* Heat Seeker Badges */
+  .badge-nuclear {
+    background: linear-gradient(135deg, #ff0000, #ff8800);
+    box-shadow: 0 0 15px #ff4400;
+    animation: pulse-fast 1s infinite;
+  }
+
+  .badge-fire {
+    background: linear-gradient(135deg, #ff4400, #ffcc00);
+    box-shadow: 0 0 10px #ff8800;
+  }
+
+  .badge-spicy {
+    background: linear-gradient(135deg, #ff00cc, #ff0066);
+    box-shadow: 0 0 10px #ff0066;
+  }
+
+  @keyframes pulse-fast {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.05); opacity: 0.9; }
+  }
 }

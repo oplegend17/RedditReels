@@ -7,6 +7,7 @@ import UserProfile from './components/UserProfile';
 import Favorites from './components/Favorites';
 import Reels from './components/Reels';
 import { LazyVideo, LazyImage } from './components/LazyMedia';
+import { MOODS } from './lib/subreddits';
 
 const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL;
 
@@ -106,6 +107,7 @@ function App() {
   const [usingCustomSubreddit, setUsingCustomSubreddit] = useState(false);
   const [customAfterId, setCustomAfterId] = useState(null);
   const [customHasMore, setCustomHasMore] = useState(true);
+  const [selectedMood, setSelectedMood] = useState(null);
   
   // Image Gallery State
   const [imageGalleryImages, setImageGalleryImages] = useState([]);
@@ -138,11 +140,26 @@ function App() {
     fetchSubreddits();
   }, []);
 
+  const calculateHeat = (ups, created) => {
+    // Simple heuristic: ups relative to others in batch + recency
+    // Since we don't have batch stats easily, we'll just use raw ups thresholds for now
+    // In a real app, you'd normalize this against the subreddit's average
+    if (ups > 5000) return 'nuclear';
+    if (ups > 1000) return 'fire';
+    if (ups > 500) return 'spicy';
+    return null;
+  };
+
   const fetchVideos = async (isNewSubreddit = false) => {
     const isCustom = usingCustomSubreddit;
-    const sub = isCustom ? customSubreddit.trim() : selectedSubreddit;
-    const after = isCustom ? (isNewSubreddit ? '' : customAfterId) : (isNewSubreddit ? '' : afterId);
-    const hasMoreCheck = isCustom ? (isNewSubreddit || customHasMore) : (isNewSubreddit || hasMore);
+    const isMood = !!selectedMood;
+    
+    let sub = selectedSubreddit;
+    if (isCustom) sub = customSubreddit.trim();
+    if (isMood) sub = selectedMood.subreddits.join('+');
+
+    const after = (isCustom || isMood) ? (isNewSubreddit ? '' : customAfterId) : (isNewSubreddit ? '' : afterId);
+    const hasMoreCheck = (isCustom || isMood) ? (isNewSubreddit || customHasMore) : (isNewSubreddit || hasMore);
 
     if (!sub || !hasMoreCheck) return;
 
@@ -165,12 +182,13 @@ function App() {
           title: p.title,
           url: p?.media?.reddit_video?.fallback_url || p?.preview?.reddit_video_preview?.fallback_url,
           thumbnail: p?.preview?.images?.[0]?.source?.url?.replace(/&amp;/g, '&') || '',
-          subreddit: sub
+          subreddit: p.subreddit,
+          heat: calculateHeat(p.ups, p.created_utc)
         }));
 
       const newAfter = data?.data?.after;
       
-      if (isCustom) {
+      if (isCustom || isMood) {
         setCustomAfterId(newAfter);
         setCustomHasMore(!!newAfter && vids.length > 0);
       } else {
@@ -210,7 +228,7 @@ function App() {
           title: p.title,
           url: p.url,
           thumbnail: p.thumbnail?.startsWith('http') ? p.thumbnail : p.url,
-          subreddit: sub
+          subreddit: p.subreddit
         }));
 
       const newAfter = data?.data?.after;
@@ -233,13 +251,15 @@ function App() {
 
   useEffect(() => {
     if (activeTab === 'gallery') {
-      if (usingCustomSubreddit) {
+      if (selectedMood) {
+        fetchVideos(true);
+      } else if (usingCustomSubreddit) {
         if (customSubreddit) fetchVideos(true);
       } else if (selectedSubreddit) {
         fetchVideos(true);
       }
     }
-  }, [selectedSubreddit, usingCustomSubreddit, activeTab]);
+  }, [selectedSubreddit, usingCustomSubreddit, activeTab, selectedMood]);
 
   useEffect(() => {
     if (activeTab === 'image-gallery') {
@@ -281,7 +301,7 @@ function App() {
     if (isFavorite(video.id)) {
       await removeFavorite(video.id);
     } else {
-      await addFavorite({ ...video, subreddit: selectedSubreddit });
+      await addFavorite({ ...video, subreddit: video.subreddit });
     }
   };
 
@@ -301,6 +321,13 @@ function App() {
     } catch (error) {
       window.open(item.url, '_blank');
     }
+  };
+
+  const handleMoodSelect = (mood) => {
+    setSelectedMood(mood);
+    setUsingCustomSubreddit(false);
+    setCustomSubreddit('');
+    setVideos([]); // Clear videos to force fresh fetch
   };
 
   if (!session) return <Auth />;
@@ -387,13 +414,44 @@ function App() {
 
       <main className="max-w-[1800px] mx-auto px-4 md:px-8">
         {(activeTab === 'gallery' || activeTab === 'image-gallery') && (
-          <div className="flex flex-col items-center gap-6 mb-12 sticky top-24 z-30 pointer-events-none">
-            <div className="pointer-events-auto flex gap-4 bg-black/60 backdrop-blur-xl p-2 rounded-2xl border border-white/10 shadow-2xl">
+          <div className="flex flex-col gap-6 mb-12 sticky top-24 z-30 pointer-events-none">
+            {/* Mood Selector */}
+            {activeTab === 'gallery' && (
+              <div className="pointer-events-auto flex gap-3 overflow-x-auto pb-4 no-scrollbar max-w-full mx-auto">
+                {MOODS.map(mood => (
+                  <button
+                    key={mood.id}
+                    onClick={() => handleMoodSelect(mood)}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-300 border ${
+                      selectedMood?.id === mood.id
+                        ? 'bg-neon-pink text-white border-neon-pink shadow-[0_0_15px_rgba(255,47,86,0.4)] scale-105'
+                        : 'bg-black/60 text-neutral-400 border-white/10 hover:bg-white/10 hover:text-white backdrop-blur-xl'
+                    }`}
+                  >
+                    <span>{mood.icon}</span>
+                    <span>{mood.label}</span>
+                  </button>
+                ))}
+                <button
+                  onClick={() => { setSelectedMood(null); setUsingCustomSubreddit(false); setVideos([]); }}
+                  className={`px-5 py-2.5 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-300 border ${
+                    !selectedMood && !usingCustomSubreddit
+                      ? 'bg-white text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.3)]'
+                      : 'bg-black/60 text-neutral-400 border-white/10 hover:bg-white/10 hover:text-white backdrop-blur-xl'
+                  }`}
+                >
+                  All
+                </button>
+              </div>
+            )}
+
+            <div className="pointer-events-auto flex gap-4 bg-black/60 backdrop-blur-xl p-2 rounded-2xl border border-white/10 shadow-2xl mx-auto w-fit">
               <select 
                 value={activeTab === 'gallery' ? (usingCustomSubreddit ? '' : selectedSubreddit) : (imageGalleryUsingCustomSubreddit ? '' : imageGallerySelectedSubreddit)}
                 onChange={(e) => {
                   if (activeTab === 'gallery') {
                     setUsingCustomSubreddit(false);
+                    setSelectedMood(null);
                     setSelectedSubreddit(e.target.value);
                   } else {
                     setImageGalleryUsingCustomSubreddit(false);
@@ -420,6 +478,7 @@ function App() {
                   if (e.key === 'Enter') {
                     if (activeTab === 'gallery') {
                       setUsingCustomSubreddit(true);
+                      setSelectedMood(null);
                       fetchVideos(true);
                     } else {
                       setImageGalleryUsingCustomSubreddit(true);
@@ -433,6 +492,7 @@ function App() {
                 onClick={() => {
                    if (activeTab === 'gallery') {
                       setUsingCustomSubreddit(true);
+                      setSelectedMood(null);
                       fetchVideos(true);
                     } else {
                       setImageGalleryUsingCustomSubreddit(true);
@@ -468,6 +528,7 @@ function App() {
                       onToggleLike={(e) => handleFavoriteClick(e, vid)}
                       onDownload={(e) => handleDownload(e, vid)}
                       className="w-full h-full"
+                      heat={vid.heat}
                     />
                   </div>
                 </div>
