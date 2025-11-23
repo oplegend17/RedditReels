@@ -1,5 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useFavorites } from '../lib/useFavorites';
+import { useHistory } from '../lib/useHistory';
+import { getIcon } from './GamificationIcons';
 
 export default function Reels() {
   const [videos, setVideos] = useState([]);
@@ -14,6 +16,7 @@ export default function Reels() {
   const containerRef = useRef(null);
   const containerRef2 = useRef(null);
   const { favorites, addFavorite, removeFavorite, isFavorite } = useFavorites();
+  const { isSeen, markAsSeen } = useHistory();
   const [page, setPage] = useState(1);
   const [page2, setPage2] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -41,16 +44,29 @@ export default function Reels() {
           heat: calculateHeat(v.ups || Math.floor(Math.random() * 6000))
         }));
 
+        // Filter out seen videos, but keep at least some if all are seen to avoid empty state
+        // In a real app, we'd request "unseen" from backend. Here we filter client side.
+        // If we filter too many, we might need to fetch again.
+        
+        const filterSeen = (list) => {
+          const unseen = list.filter(v => !isSeen(v.id));
+          // If we filtered everything, just return the original list (fallback)
+          return unseen.length > 0 ? unseen : list;
+        };
+
         if (stream === 1) {
           setVideos(prev => {
             const ids = new Set(prev.map(v => v.id));
-            const filtered = newReels.filter(v => !ids.has(v.id));
+            // Filter duplicates from existing
+            const uniqueNew = newReels.filter(v => !ids.has(v.id));
+            const filtered = filterSeen(uniqueNew);
             return [...prev, ...filtered];
           });
         } else {
           setVideos2(prev => {
             const ids = new Set(prev.map(v => v.id));
-            const filtered = newReels.filter(v => !ids.has(v.id));
+            const uniqueNew = newReels.filter(v => !ids.has(v.id));
+            const filtered = filterSeen(uniqueNew);
             return [...prev, ...filtered];
           });
         }
@@ -62,12 +78,12 @@ export default function Reels() {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, []);
+  }, [isSeen]);
 
   useEffect(() => {
     fetchRandomReels(1, 1);
     fetchRandomReels(1, 2);
-  }, [fetchRandomReels]);
+  }, []); // Run once on mount
 
   // Observer for Stream 1
   useEffect(() => {
@@ -77,6 +93,8 @@ export default function Reels() {
         if (entry.isIntersecting) {
           const videoId = entry.target.dataset.id;
           setActiveVideoId(videoId);
+          markAsSeen(videoId); // Mark as seen when active
+          
           const index = videos.findIndex(v => v.id === videoId);
           if (index > videos.length - 4 && !loadingMore) {
             setPage(p => p + 1);
@@ -90,7 +108,7 @@ export default function Reels() {
     const elements = document.querySelectorAll('.reel-item-1');
     elements.forEach(el => observer.observe(el));
     return () => observer.disconnect();
-  }, [videos, loadingMore, page, fetchRandomReels]);
+  }, [videos, loadingMore, page, fetchRandomReels, markAsSeen]);
 
   // Observer for Stream 2
   useEffect(() => {
@@ -101,6 +119,8 @@ export default function Reels() {
         if (entry.isIntersecting) {
           const videoId = entry.target.dataset.id;
           setActiveVideoId2(videoId);
+          markAsSeen(videoId); // Mark as seen when active
+
           const index = videos2.findIndex(v => v.id === videoId);
           if (index > videos2.length - 4 && !loadingMore) {
             setPage2(p => p + 1);
@@ -114,7 +134,7 @@ export default function Reels() {
     const elements = document.querySelectorAll('.reel-item-2');
     elements.forEach(el => observer.observe(el));
     return () => observer.disconnect();
-  }, [videos2, loadingMore, page2, fetchRandomReels, viewMode]);
+  }, [videos2, loadingMore, page2, fetchRandomReels, viewMode, markAsSeen]);
 
   const toggleMute = (e) => {
     e.stopPropagation();
@@ -127,6 +147,31 @@ export default function Reels() {
       await removeFavorite(video.id);
     } else {
       await addFavorite({ ...video, subreddit: video.subreddit });
+    }
+  };
+
+  const handleShare = async (e, video) => {
+    e.stopPropagation();
+    const shareData = {
+      title: 'Check out this video on Reddit Reels!',
+      text: video.title,
+      url: window.location.origin + '/reels?video=' + video.id // Hypothetical deep link
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        console.log('Error sharing:', err);
+      }
+    } else {
+      // Fallback to clipboard
+      try {
+        await navigator.clipboard.writeText(video.url);
+        alert('Video link copied to clipboard!');
+      } catch (err) {
+        console.error('Failed to copy:', err);
+      }
     }
   };
 
@@ -192,6 +237,7 @@ export default function Reels() {
               isActive={activeVideoId === video.id} 
               isMuted={isMuted}
               onLike={handleLike}
+              onShare={handleShare}
               isFavorite={isFavorite}
               className="reel-item-1"
               onEnded={() => handleVideoEnd(1)}
@@ -214,6 +260,7 @@ export default function Reels() {
                 isActive={activeVideoId2 === video.id} 
                 isMuted={isMuted}
                 onLike={handleLike}
+                onShare={handleShare}
                 isFavorite={isFavorite}
                 className="reel-item-2"
                 onEnded={() => handleVideoEnd(2)}
@@ -226,7 +273,7 @@ export default function Reels() {
   );
 }
 
-function ReelItem({ video, isActive, isMuted, onLike, isFavorite, className, onEnded }) {
+function ReelItem({ video, isActive, isMuted, onLike, onShare, isFavorite, className, onEnded }) {
   return (
     <div 
       data-id={video.id}
@@ -256,6 +303,13 @@ function ReelItem({ video, isActive, isMuted, onLike, isFavorite, className, onE
             isLiked={isFavorite(video.id)} 
             onClick={(e) => onLike(e, video)} 
           />
+          <button
+            onClick={(e) => onShare(e, video)}
+            className="w-12 h-12 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-white/10 transition-all shadow-lg"
+            title="Share"
+          >
+            {getIcon('share')}
+          </button>
         </div>
 
         <div className="absolute bottom-0 left-0 right-0 p-6 pb-24 md:pb-8 pointer-events-none">

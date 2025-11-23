@@ -15,7 +15,8 @@ import {
   Dumbbell,
   Timer,
   Infinity,
-  Radiation
+  Radiation,
+  Share2
 } from 'lucide-react';
 
 export const GAMIFICATION_ICONS = {
@@ -42,7 +43,8 @@ export const GAMIFICATION_ICONS = {
   rank1: <Trophy className="w-6 h-6 text-yellow-500" />,
   rank2: <Medal className="w-6 h-6 text-gray-300" />,
   rank3: <Medal className="w-6 h-6 text-amber-600" />,
-  rankGeneric: <Award className="w-6 h-6 text-white/50" />
+  rankGeneric: <Award className="w-6 h-6 text-white/50" />,
+  share: <Share2 className="w-6 h-6" />
 };
 
 export const getIcon = (name) => {

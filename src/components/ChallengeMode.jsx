@@ -4,11 +4,13 @@ import { useChallenges, CHALLENGE_TYPES } from '../lib/useChallenges';
 import { useIntensity } from '../lib/useIntensity';
 import { useAchievements } from '../lib/useAchievements';
 import { useFavorites } from '../lib/useFavorites';
+import { useHistory } from '../lib/useHistory';
 import IntensityMeter from './IntensityMeter';
 import ChallengeOverlay from './ChallengeOverlay';
 import AchievementPopup from './AchievementSystem';
 import { addToLeaderboard } from '../lib/leaderboardService';
 import { auth } from '../lib/firebase';
+import { getIcon } from './GamificationIcons';
 
 const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL || 'http://localhost:3000';
 
@@ -62,6 +64,7 @@ export default function ChallengeMode() {
   const intensity = useIntensity(challenges.isActive);
   const achievements = useAchievements();
   const { isFavorite, addFavorite, removeFavorite } = useFavorites();
+  const { isSeen, markAsSeen } = useHistory();
 
   // Sync URL with state
   useEffect(() => {
@@ -151,10 +154,16 @@ export default function ChallengeMode() {
         throw new Error('No videos found. Please check your internet connection or try again later.');
       }
 
-      // Shuffle videos for randomness
-      vids = vids.sort(() => Math.random() - 0.5);
+      // Filter seen videos
+      const unseenVids = vids.filter(v => !isSeen(v.id));
+      // If we have enough unseen, use them. Otherwise mix in some seen ones or just use what we have.
+      // For challenges, it's better to show something than nothing.
+      const finalVids = unseenVids.length >= 5 ? unseenVids : vids;
 
-      setVideos(vids);
+      // Shuffle videos for randomness
+      const shuffledVids = finalVids.sort(() => Math.random() - 0.5);
+
+      setVideos(shuffledVids);
       setCurrentVideoIndex(0);
     } catch (error) {
       console.error('Failed to fetch challenge videos:', error);
@@ -162,7 +171,7 @@ export default function ChallengeMode() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [isSeen]);
 
   // Start challenge
   const handleStartChallenge = async () => {
@@ -186,13 +195,18 @@ export default function ChallengeMode() {
       if (currentVideo?.heat) {
         achievements.recordVideoWatch(currentVideo.heat);
       }
+      
+      // Mark as seen
+      if (currentVideo) {
+        markAsSeen(currentVideo.id);
+      }
 
       // Fetch more videos if running low
       if (currentVideoIndex >= videos.length - 3) {
         fetchChallengeVideos(selectedChallenge.id);
       }
     }
-  }, [currentVideoIndex, videos, challenges, achievements, selectedChallenge, fetchChallengeVideos]);
+  }, [currentVideoIndex, videos, challenges, achievements, selectedChallenge, fetchChallengeVideos, markAsSeen]);
 
   // Handle previous video
   const previousVideo = useCallback(() => {
@@ -277,6 +291,32 @@ export default function ChallengeMode() {
       await removeFavorite(currentVideo.id);
     } else {
       await addFavorite({ ...currentVideo, subreddit: currentVideo.subreddit });
+    }
+  };
+
+  const handleShare = async (e) => {
+    e?.stopPropagation();
+    if (!currentVideo) return;
+
+    const shareData = {
+      title: 'Check out this video on Reddit Reels!',
+      text: currentVideo.title,
+      url: window.location.origin + '/reels?video=' + currentVideo.id
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        console.log('Error sharing:', err);
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(currentVideo.url);
+        alert('Video link copied to clipboard!');
+      } catch (err) {
+        console.error('Failed to copy:', err);
+      }
     }
   };
 
@@ -537,6 +577,15 @@ export default function ChallengeMode() {
           <svg className={`w-8 h-8 ${currentVideo && isFavorite(currentVideo.id) ? 'fill-current' : 'fill-none'}`} stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
           </svg>
+        </button>
+
+        {/* Share Button */}
+        <button
+          onClick={handleShare}
+          className="w-16 h-16 flex items-center justify-center rounded-full bg-black/40 hover:bg-black/60 backdrop-blur-md border border-white/20 hover:border-white/50 text-white transition-all duration-300 hover:scale-110 group"
+          title="Share Video"
+        >
+          {getIcon('share')}
         </button>
 
         {/* Next Video (Down Arrow) */}
