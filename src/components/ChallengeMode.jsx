@@ -1,0 +1,421 @@
+import { useState, useEffect, useCallback } from 'react';
+import { useChallenges, CHALLENGE_TYPES } from '../lib/useChallenges';
+import { useIntensity } from '../lib/useIntensity';
+import { useAchievements } from '../lib/useAchievements';
+import IntensityMeter from './IntensityMeter';
+import ChallengeOverlay from './ChallengeOverlay';
+import AchievementPopup from './AchievementSystem';
+import { addToLeaderboard } from './Leaderboard';
+
+const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL;
+
+export default function ChallengeMode() {
+  const [selectedChallenge, setSelectedChallenge] = useState(null);
+  const [selectedDuration, setSelectedDuration] = useState(null);
+  const [videos, setVideos] = useState([]);
+  const [currentVideoIndex, setCurrentVideoIndex] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+  const [results, setResults] = useState(null);
+
+  const challenges = useChallenges();
+  const intensity = useIntensity(challenges.isActive);
+  const achievements = useAchievements();
+
+  // Fetch videos for challenge
+  const fetchChallengeVideos = useCallback(async (challengeType) => {
+    setIsLoading(true);
+    try {
+      let subreddit = 'nsfw+porn+bonermaterial+nsfw_gifs+60fpsporn';
+      
+      // For endurance run, prioritize high heat content
+      if (challengeType === 'enduranceRun') {
+        subreddit = 'nsfw+hardcore+rough+anal+deepthroat+bdsm';
+      }
+      
+      // For roulette, completely random
+      if (challengeType === 'roulette') {
+        subreddit = 'all'; // This will give truly random NSFW content
+      }
+
+      const response = await fetch(`${BACKEND_API_URL}/api/reddit/${subreddit}`);
+      const data = await response.json();
+      
+      const vids = (data?.data?.children  || [])
+        .map(post => post?.data)
+        .filter(p => 
+          (p?.is_video && p?.media?.reddit_video?.fallback_url) ||
+          (p?.preview?.reddit_video_preview?.fallback_url)
+        )
+        .map(p => ({
+          id: p.id,
+          title: p.title,
+          url: p?.media?.reddit_video?.fallback_url || p?.preview?.reddit_video_preview?.fallback_url,
+          thumbnail: p?.preview?.images?.[0]?.source?.url?.replace(/&amp;/g, '&') || '',
+          subreddit: p.subreddit,
+          ups: p.ups || 0,
+          heat: calculateHeat(p.ups)
+        }));
+
+      setVideos(vids);
+      setCurrentVideoIndex(0);
+    } catch (error) {
+      console.error('Failed to fetch videos:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const calculateHeat = (ups) => {
+    if (ups > 5000) return 'nuclear';
+    if (ups > 1000) return 'fire';
+    if (ups > 500) return 'spicy';
+    return null;
+  };
+
+  // Start challenge
+  const handleStartChallenge = async () => {
+    if (!selectedChallenge || !selectedDuration) return;
+
+    await fetchChallengeVideos(selectedChallenge.id);
+    challenges.startChallenge(selectedChallenge.id, selectedDuration);
+    intensity.reset();
+    setShowResults(false);
+  };
+
+  // Handle video change
+  const nextVideo = useCallback(() => {
+    if (currentVideoIndex < videos.length - 1) {
+      setCurrentVideoIndex(prev => prev + 1);
+      challenges.recordVideoWatched();
+      
+      // Record heat for achievements
+      const currentVideo = videos[currentVideoIndex];
+      if (currentVideo?.heat) {
+        achievements.recordVideoWatch(currentVideo.heat);
+      }
+
+      // Fetch more videos if running low
+      if (currentVideoIndex >= videos.length - 3) {
+        fetchChallengeVideos(selectedChallenge.id);
+      }
+    }
+  }, [currentVideoIndex, videos, challenges, achievements, selectedChallenge, fetchChallengeVideos]);
+
+  // Auto-advance for rapid fire and roulette
+  useEffect(() => {
+    if (!challenges.isActive) return;
+    
+    const isRapidFire = selectedChallenge?.id === 'rapidFire';
+    const isRoulette = selectedChallenge?.id === 'roulette';
+    
+    if (isRapidFire || isRoulette) {
+      const intervalTime = isRapidFire ? 12000 : 25000; // 12s for rapid fire, 25s for roulette
+      const autoAdvance = setInterval(nextVideo, intervalTime);
+      return () => clearInterval(autoAdvance);
+    }
+  }, [challenges.isActive, selectedChallenge, nextVideo]);
+
+  // Update intensity based on current video
+  useEffect(() => {
+    if (challenges.isActive && videos[currentVideoIndex]) {
+      const currentVideo = videos[currentVideoIndex];
+      intensity.startAccumulation(currentVideo.heat || 'normal');
+    } else {
+      intensity.stopAccumulation();
+    }
+
+    return () => intensity.stopAccumulation();
+  }, [challenges.isActive, currentVideoIndex, videos, intensity]);
+
+  // Handle challenge completion
+  const handleChallengeComplete = useCallback(() => {
+    const challengeData = challenges.completeChallenge();
+    
+    // Record achievement progress
+    achievements.recordChallengeComplete(
+      challengeData.challengeType, 
+      Math.floor(challengeData.duration / 60)
+    );
+
+    // Add to leaderboard
+    addToLeaderboard({
+      ...challengeData,
+      intensity: intensity.intensity
+    });
+
+    // Show results
+    setResults({
+      ...challengeData,
+      success: true,
+      intensity: intensity.intensity
+    });
+    setShowResults(true);
+
+    // Reset
+    intensity.reset();
+  }, [challenges, achievements, intensity]);
+
+  // Handle challenge failure
+  const handleChallengeFail = useCallback((reason) => {
+    const challengeData = challenges.failChallenge(reason);
+    
+    setResults({
+      ...challengeData,
+      success: false,
+      intensity: intensity.intensity
+    });
+    setShowResults(true);
+
+    intensity.reset();
+  }, [challenges, intensity]);
+
+  // Auto-complete when time runs out
+  useEffect(() => {
+    if (challenges.challengeState === 'complete') {
+      handleChallengeComplete();
+    }
+  }, [challenges.challengeState, handleChallengeComplete]);
+
+  const currentVideo = videos[currentVideoIndex];
+
+  // Challenge Selection Screen
+  if (!challenges.isActive && !showResults) {
+    return (
+      <div className="min-h-screen p-8">
+        <div className="max-w-6xl mx-auto">
+          {/* Header */}
+          <div className="text-center mb-12">
+            <h1 className="text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-500 via-orange-500 to-pink-500 mb-4">
+              🔥 Challenge Mode
+            </h1>
+            <p className="text-xl text-white/70">
+              Test your limits with intense challenge modes
+            </p>
+          </div>
+
+          {/* Challenge Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            {Object.values(CHALLENGE_TYPES).map(challenge => (
+              <button
+                key={challenge.id}
+                onClick={() => {
+                  setSelectedChallenge(challenge);
+                  setSelectedDuration(challenge.durations ? challenge.durations[0] : 600);
+                }}
+                className={`text-left p-6 rounded-2xl border-2 transition-all duration-300 ${
+                  selectedChallenge?.id === challenge.id
+                    ? 'bg-neon-pink/20 border-neon-pink scale-105 shadow-[0_0_30px_rgba(255,47,86,0.4)]'
+                    : 'glass-panel border-white/10 hover:border-white/30 hover:scale-105'
+                }`}
+              >
+                {/* Icon */}
+                <div className="text-5xl mb-4">{challenge.icon}</div>
+
+                {/* Title */}
+                <h3 className="text-2xl font-black text-white mb-2">
+                  {challenge.name}
+                </h3>
+
+                {/* Description */}
+                <p className="text-sm text-white/70 mb-4">
+                  {challenge.description}
+                </p>
+
+                {/* Rules */}
+                <ul className="text-xs text-white/50 space-y-1">
+                  {challenge.rules.map((rule, index) => (
+                    <li key={index}>• {rule}</li>
+                  ))}
+                </ul>
+              </button>
+            ))}
+          </div>
+
+          {/* Duration Selection & Start */}
+          {selectedChallenge && (
+            <div className="glass-panel p-8 rounded-2xl border-2 border-neon-pink/50 animate-in fade-in slide-in-from-bottom duration-500">
+              <h3 className="text-2xl font-black text-white mb-6">
+                Configure {selectedChallenge.name}
+              </h3>
+
+              {selectedChallenge.durations && (
+                <div className="mb-6">
+                  <label className="block text-sm font-bold text-white/70 uppercase tracking-wider mb-3">
+                    Duration
+                  </label>
+                  <div className="flex gap-3">
+                    {selectedChallenge.durations.map(duration => (
+                      <button
+                        key={duration}
+                        onClick={() => setSelectedDuration(duration)}
+                        className={`px-6 py-3 rounded-full text-lg font-bold transition-all duration-300 ${
+                          selectedDuration === duration
+                            ? 'bg-neon-blue text-black shadow-[0_0_20px_rgba(0,243,255,0.4)]'
+                            : 'bg-white/10 text-white hover:bg-white/20'
+                        }`}
+                      >
+                        {Math.floor(duration / 60)} min
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={handleStartChallenge}
+                disabled={isLoading}
+                className="w-full px-8 py-5 rounded-full bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-500 hover:to-pink-500 text-white text-2xl font-black shadow-[0_0_30px_rgba(255,47,86,0.5)] hover:shadow-[0_0_50px_rgba(255,47,86,0.7)] transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? 'Loading...' : '🔥 Start Challenge'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Results Screen
+  if (showResults && results) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-xl">
+        <div className="max-w-2xl w-full p-8">
+          <div className={`glass-panel p-12 rounded-3xl border-4 ${
+            results.success 
+              ? 'border-green-500 shadow-[0_0_50px_rgba(0,255,0,0.5)]' 
+              : 'border-red-500 shadow-[0_0_50px_rgba(255,0,0,0.5)]'
+          }`}>
+            {/* Result Icon */}
+            <div className="text-center mb-8">
+              <div className="text-9xl mb-4 animate-bounce">
+                {results.success ? '🏆' : '💔'}
+              </div>
+              <h2 className={`text-5xl font-black mb-2 ${
+                results.success ? 'text-green-500' : 'text-red-500'
+              }`}>
+                {results.success ? 'VICTORY!' : 'CHALLENGE FAILED'}
+              </h2>
+              <p className="text-white/70 text-xl">
+                {results.success 
+                  ? 'You completed the challenge!' 
+                  : `Reason: ${results.reason || 'Unknown'}`}
+              </p>
+            </div>
+
+            {/* Stats */}
+            <div className="grid grid-cols-2 gap-6 mb-8">
+              <div className="text-center glass-panel p-4 rounded-xl">
+                <div className="text-4xl font-black text-neon-blue">
+                  {challenges.formatTime(results.duration)}
+                </div>
+                <div className="text-xs text-white/60 uppercase tracking-wider">Duration</div>
+              </div>
+              <div className="text-center glass-panel p-4 rounded-xl">
+                <div className="text-4xl font-black text-neon-pink">
+                  {results.videosWatched}
+                </div>
+                <div className="text-xs text-white/60 uppercase tracking-wider">Videos Watched</div>
+              </div>
+              <div className="text-center glass-panel p-4 rounded-xl">
+                <div className="text-4xl font-black text-yellow-500">
+                  {Math.round(results.intensity)}%
+                </div>
+                <div className="text-xs text-white/60 uppercase tracking-wider">Peak Intensity</div>
+              </div>
+              <div className="text-center glass-panel p-4 rounded-xl">
+                <div className="text-4xl font-black text-green-500">
+                  {achievements.unlockedAchievements.length}
+                </div>
+                <div className="text-xs text-white/60 uppercase tracking-wider">Achievements</div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-4">
+              <button
+                onClick={() => {
+                  setShowResults(false);
+                  setSelectedChallenge(null);
+                  setSelectedDuration(null);
+                  challenges.endChallenge();
+                }}
+                className="flex-1 px-6 py-4 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold transition-all duration-300"
+              >
+                Back to Menu
+              </button>
+              <button
+                onClick={() => {
+                  setShowResults(false);
+                  handleStartChallenge();
+                }}
+                className="flex-1 px-6 py-4 rounded-full bg-neon-pink hover:bg-red-600 text-white font-bold shadow-[0_0_20px_rgba(255,47,86,0.4)] transition-all duration-300"
+              >
+                Try Again
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Active Challenge Screen
+  return (
+    <div className="fixed inset-0 z-40 bg-black">
+      {/* Video Player */}
+      {currentVideo && (
+        <video
+          key={currentVideo.id}
+          src={currentVideo.url}
+          poster={currentVideo.thumbnail}
+          autoPlay
+          loop={selectedChallenge?.id !== 'rapidFire' && selectedChallenge?.id !== 'roulette'}
+          muted={false}
+          playsInline
+          className="w-full h-full object-cover"
+          onEnded={() => {
+            if (selectedChallenge?.id === 'rapidFire' || selectedChallenge?.id === 'roulette') {
+              nextVideo();
+            }
+          }}
+        />
+      )}
+
+      {/* Intensity Meter */}
+      <IntensityMeter 
+        intensity={intensity.intensity}
+        dangerZone={intensity.dangerZone}
+      />
+
+      {/* Challenge Overlay */}
+      <ChallengeOverlay
+        challengeName={selectedChallenge?.name}
+        elapsedTime={challenges.elapsedTime}
+        remainingTime={challenges.getRemainingTime()}
+        formatTime={challenges.formatTime}
+        intensity={intensity.intensity}
+        videosWatched={challenges.videosWatched}
+        onGiveUp={() => handleChallengeFail('gave_up')}
+        onILost={() => handleChallengeFail('lost')}
+        showControls={challenges.canPause}
+      />
+
+      {/* Achievement Popups */}
+      <AchievementPopup 
+        achievements={achievements.newlyUnlocked.map(id => achievements.allAchievements[id.toUpperCase().replace(/_/g, '_')])}
+        onClose={() => {}}
+      />
+
+      {/* Next Video Button (for non-auto modes) */}
+      {selectedChallenge?.id !== 'rapidFire' && selectedChallenge?.id !== 'roulette' && (
+        <button
+          onClick={nextVideo}
+          className="fixed bottom-24 right-8 z-50 px-6 py-3 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white font-bold transition-all duration-300"
+        >
+          Next Video →
+        </button>
+      )}
+    </div>
+  );
+}

@@ -104,4 +104,93 @@
     0%, 100% { transform: scale(1); opacity: 1; }
     50% { transform: scale(1.05); opacity: 0.9; }
   }
+
+  /* Challenge Mode Animations */
+  @keyframes pulse-danger {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.6; }
+  }
+
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
+    20%, 40%, 60%, 80% { transform: translateX(2px); }
+  }
+
+  @keyframes chromatic-ab {
+    0%, 100% { text-shadow: -2px 0 red, 2px 0 blue; }
+    50% { text-shadow: 2px 0 red, -2px 0 blue; }
+  }
+
+  @keyframes sparkle {
+    0%, 100% { 
+      opacity: 0;
+      transform: scale(0) rotate(0deg);
+    }
+    50% { 
+      opacity: 1;
+      transform: scale(1) rotate(180deg);
+    }
+  }
+
+  .sparkle-effect {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .sparkle-effect::before,
+  .sparkle-effect::after {
+    content: '✨';
+    position: absolute;
+    font-size: 30px;
+    animation: sparkle 2s ease-in-out infinite;
+  }
+
+  .sparkle-effect::before {
+    top: 10%;
+    left: 10%;
+    animation-delay: 0s;
+  }
+
+  .sparkle-effect::after {
+    bottom: 10%;
+    right: 10%;
+    animation-delay: 1s;
+  }
+
+  /* No scrollbar utility */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Intensity-based screen vignette */
+  .intensity-vignette {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(circle at center, transparent 30%, rgba(0,0,0,0.8) 100%);
+    transition: opacity 0.3s ease-out;
+  }
+
+  /* Countdown number animation */
+  @keyframes countdown-pulse {
+    0% { 
+      transform: scale(1);
+      opacity: 1;
+    }
+    50% { 
+      transform: scale(1.2);
+      opacity: 0.8;
+    }
+    100% { 
+      transform: scale(0.8);
+      opacity: 0;
+    }
+  }
 }

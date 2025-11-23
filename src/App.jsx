@@ -8,6 +8,10 @@ import Favorites from './components/Favorites';
 import Reels from './components/Reels';
 import { LazyVideo, LazyImage } from './components/LazyMedia';
 import { MOODS } from './lib/subreddits';
+import ChallengeMode from './components/ChallengeMode';
+import Leaderboard from './components/Leaderboard';
+import { AchievementGallery } from './components/AchievementSystem';
+import { useAchievements } from './lib/useAchievements';
 
 const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL;
 
@@ -108,6 +112,9 @@ function App() {
   const [customAfterId, setCustomAfterId] = useState(null);
   const [customHasMore, setCustomHasMore] = useState(true);
   const [selectedMood, setSelectedMood] = useState(null);
+  
+  // Achievement & Challenge state
+  const achievements = useAchievements();
   
   // Immersive Scroll State
   const [showNav, setShowNav] = useState(true);
@@ -395,6 +402,8 @@ function App() {
               { id: 'gallery', label: 'Videos' },
               { id: 'image-gallery', label: 'Images' },
               { id: 'reels', label: 'Reels' },
+              { id: 'challenges', label: '🔥 Challenges' },
+              { id: 'stats', label: 'Stats' },
               { id: 'favorites', label: 'Favorites' },
               { id: 'profile', label: 'Profile' }
             ].map(tab => (
@@ -428,7 +437,7 @@ function App() {
       {/* Mobile Nav */}
       {mobileNavOpen && (
         <div className="fixed inset-0 z-40 bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center gap-8 md:hidden" onClick={() => setMobileNavOpen(false)}>
-          {['gallery', 'image-gallery', 'reels', 'favorites', 'profile'].map(tab => (
+          {['gallery', 'image-gallery', 'reels', 'challenges', 'stats', 'favorites', 'profile'].map(tab => (
             <button key={tab} className="text-2xl font-bold capitalize text-white" onClick={() => setActiveTab(tab)}>{tab.replace('-', ' ')}</button>
           ))}
           <button className="text-xl text-red-500 font-bold" onClick={() => supabase.auth.signOut()}>Sign Out</button>
@@ -590,6 +599,18 @@ function App() {
         )}
 
         {activeTab === 'reels' && <Reels />}
+        {activeTab === 'challenges' && <ChallengeMode />}
+        {activeTab === 'stats' && (
+          <div className="space-y-8">
+            <Leaderboard currentStats={achievements.stats} />
+            <AchievementGallery 
+              achievements={achievements.allAchievements}
+              unlockedIds={achievements.unlockedAchievements}
+              stats={achievements.stats}
+              getProgress={achievements.getProgress}
+            />
+          </div>
+        )}
         {activeTab === 'favorites' && <Favorites />}
         {activeTab === 'profile' && <UserProfile session={session} />}
       </main>
