@@ -2,73 +2,123 @@ import { useState, useEffect } from 'react';
 import { auth, db } from '../lib/firebase';
 import { updateProfile } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { useAchievements } from '../lib/useAchievements';
+import { useFavorites } from '../lib/useFavorites';
+import { useFavoriteSubreddits } from '../lib/useFavoriteSubreddits';
+import { useHistory } from '../lib/useHistory';
+import { ACHIEVEMENT_TIERS } from '../lib/achievements';
+import VideoModal from './VideoModal';
+
+const TIER_ORDER = ['platinum', 'gold', 'silver', 'bronze'];
+
+function StatCard({ label, value, icon }) {
+  return (
+    <div className="flex flex-col items-center gap-1 bg-white/5 border border-white/10 rounded-2xl px-5 py-4 flex-1 min-w-0">
+      <span className="text-2xl">{icon}</span>
+      <span className="text-2xl font-black text-white">{value}</span>
+      <span className="text-xs text-white/40 font-medium text-center">{label}</span>
+    </div>
+  );
+}
+
+function AchievementCard({ achievement, unlocked, progress }) {
+  const tier = ACHIEVEMENT_TIERS[achievement.tier];
+  return (
+    <div className={`relative flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all duration-300 ${
+      unlocked
+        ? 'border-white/20 bg-white/5'
+        : 'border-white/5 bg-white/[0.02] opacity-50'
+    }`}
+      style={unlocked ? { boxShadow: `0 0 20px ${tier.glow}` } : {}}
+    >
+      {/* Tier dot */}
+      <div className="absolute top-2 right-2 w-2 h-2 rounded-full" style={{ background: tier.color }} />
+
+      <div className="text-3xl">{achievementEmoji(achievement.iconName)}</div>
+      <p className="text-xs font-bold text-white text-center leading-tight">{achievement.name}</p>
+      <p className="text-[10px] text-white/40 text-center leading-tight">{achievement.description}</p>
+
+      {!unlocked && (
+        <div className="w-full bg-white/10 rounded-full h-1 mt-1">
+          <div
+            className="h-1 rounded-full transition-all"
+            style={{ width: `${progress}%`, background: tier.color }}
+          />
+        </div>
+      )}
+
+      {unlocked && (
+        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: tier.color + '33', color: tier.color }}>
+          +{achievement.xp} XP
+        </span>
+      )}
+    </div>
+  );
+}
+
+function achievementEmoji(iconName) {
+  const map = {
+    target: '🎯', radiation: '☢️', flame: '🔥', muscle: '💪', trophy: '🏆',
+    slots: '🎰', zap: '⚡', runner: '🏃', crown: '👑', lock: '🔒',
+    hundred: '💯', star: '⭐', medal: '🥇', swords: '⚔️',
+  };
+  return map[iconName] || '🏅';
+}
+
+const TABS = ['Overview', 'Achievements', 'Favorites', 'Subreddits', 'Settings'];
 
 export default function UserProfile({ user }) {
   const [loading, setLoading] = useState(true);
-  const [username, setUsername] = useState(null);
-  const [avatarUrl, setAvatarUrl] = useState(null);
+  const [username, setUsername] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [joinDate, setJoinDate] = useState(null);
   const [updating, setUpdating] = useState(false);
+  const [updateMsg, setUpdateMsg] = useState(null);
+  const [activeTab, setActiveTab] = useState('Overview');
+  const [selectedVideo, setSelectedVideo] = useState(null);
+
+  const { stats, level, levelProgress, unlockedAchievements, allAchievements, getProgress } = useAchievements();
+  const { favorites } = useFavorites();
+  const { favoriteSubreddits, removeFavoriteSubreddit } = useFavoriteSubreddits();
+  const { seenIds } = useHistory();
 
   useEffect(() => {
-    if (user) getProfile();
+    if (user) loadProfile();
   }, [user]);
 
-  const getProfile = async () => {
+  const loadProfile = async () => {
     try {
       setLoading(true);
-      
-      // Try to load from Firestore
-      const profileRef = doc(db, 'users', user.uid);
-      const profileSnap = await getDoc(profileRef);
-
-      if (profileSnap.exists()) {
-        const data = profileSnap.data();
-        setUsername(data.username || user.displayName);
-        setAvatarUrl(data.avatarUrl || user.photoURL);
+      const ref = doc(db, 'users', user.uid);
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        const d = snap.data();
+        setUsername(d.username || user.displayName || '');
+        setAvatarUrl(d.avatarUrl || user.photoURL || '');
+        setJoinDate(d.createdAt?.toDate ? d.createdAt.toDate() : null);
       } else {
-        // Create default profile
-        const defaultUsername = user.displayName || user.email.split('@')[0];
-        await setDoc(profileRef, {
-          username: defaultUsername,
-          avatarUrl: user.photoURL || null,
-          email: user.email,
-          createdAt: new Date() 
-        });
-        setUsername(defaultUsername);
-        setAvatarUrl(user.photoURL);
+        const defaultName = user.displayName || user.email.split('@')[0];
+        await setDoc(ref, { username: defaultName, avatarUrl: user.photoURL || null, email: user.email, createdAt: new Date() });
+        setUsername(defaultName);
+        setAvatarUrl(user.photoURL || '');
+        setJoinDate(new Date());
       }
-    } catch (error) {
-      console.error('Error fetching profile:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const updateUserProfile = async (e) => {
+  const saveProfile = async (e) => {
     e.preventDefault();
+    if (!username.trim()) return;
+    setUpdating(true);
     try {
-      setUpdating(true);
-
-      if (!username?.trim()) throw new Error('Username cannot be empty');
-
-      // Update Firebase Auth profile
-      await updateProfile(auth.currentUser, {
-        displayName: username.trim(),
-        photoURL: avatarUrl?.trim() || null
-      });
-
-      // Update Firestore profile
-      const profileRef = doc(db, 'users', user.uid);
-      await setDoc(profileRef, {
-        username: username.trim(),
-        avatarUrl: avatarUrl?.trim() || null,
-        email: user.email,
-        updatedAt: new Date()
-      }, { merge: true });
-
-      alert('Profile updated successfully!');
-    } catch (error) {
-      alert(error.message || 'Error updating profile!');
+      await updateProfile(auth.currentUser, { displayName: username.trim(), photoURL: avatarUrl.trim() || null });
+      await setDoc(doc(db, 'users', user.uid), { username: username.trim(), avatarUrl: avatarUrl.trim() || null, email: user.email, updatedAt: new Date() }, { merge: true });
+      setUpdateMsg('Saved!');
+      setTimeout(() => setUpdateMsg(null), 2000);
+    } catch (err) {
+      setUpdateMsg('Error: ' + err.message);
     } finally {
       setUpdating(false);
     }
@@ -76,74 +126,315 @@ export default function UserProfile({ user }) {
 
   if (loading) {
     return (
-      <div className="flex justify-center py-20">
-        <div className="w-10 h-10 border-4 border-neon-pink border-t-transparent rounded-full animate-spin"></div>
+      <div className="flex justify-center py-32">
+        <div className="w-10 h-10 border-4 border-neon-pink border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
-  return (
-    <div className="max-w-2xl mx-auto p-8 md:p-12 glass-panel rounded-3xl animate-in fade-in slide-in-from-bottom-4 duration-500 relative overflow-hidden">
-      {/* Decorative Background */}
-      <div className="absolute top-0 right-0 w-64 h-64 bg-neon-blue/10 rounded-full blur-[80px] -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-      <div className="absolute bottom-0 left-0 w-64 h-64 bg-neon-pink/10 rounded-full blur-[80px] translate-y-1/2 -translate-x-1/2 pointer-events-none"></div>
+  const xp = stats.xp || 0;
+  const totalAchievements = Object.keys(allAchievements).length;
+  const unlockedCount = unlockedAchievements.length;
 
-      <h2 className="text-4xl font-black italic tracking-tighter text-center mb-10 text-transparent bg-clip-text bg-gradient-to-r from-white via-neon-blue to-neon-pink drop-shadow-lg relative z-10">
-        PROFILE SETTINGS
-      </h2>
-      
-      <form onSubmit={updateUserProfile} className="space-y-8 relative z-10">
-        <div className="flex flex-col items-center gap-6">
-          <div className="relative group">
-            <div className="w-40 h-40 rounded-full overflow-hidden border-4 border-white/10 group-hover:border-neon-pink transition-all duration-300 shadow-[0_0_30px_rgba(0,0,0,0.5)] group-hover:shadow-[0_0_30px_rgba(255,47,86,0.3)]">
+  // Sort achievements: unlocked first by tier, then locked
+  const sortedAchievements = Object.values(allAchievements).sort((a, b) => {
+    const aUnlocked = unlockedAchievements.includes(a.id);
+    const bUnlocked = unlockedAchievements.includes(b.id);
+    if (aUnlocked !== bUnlocked) return bUnlocked ? 1 : -1;
+    return TIER_ORDER.indexOf(a.tier) - TIER_ORDER.indexOf(b.tier);
+  });
+
+  return (
+    <div className="max-w-4xl mx-auto pb-20">
+
+      {/* Hero */}
+      <div className="relative rounded-3xl overflow-hidden mb-6 bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(255,47,86,0.15),_transparent_60%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(0,243,255,0.1),_transparent_60%)]" />
+
+        <div className="relative z-10 p-8 flex flex-col sm:flex-row items-center sm:items-end gap-6">
+          {/* Avatar */}
+          <div className="relative shrink-0">
+            <div className="w-24 h-24 rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl">
               {avatarUrl ? (
-                <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full bg-black/40 flex items-center justify-center text-5xl font-bold text-neutral-600 group-hover:text-neon-pink transition-colors">
-                  {username ? username[0].toUpperCase() : '?'}
+                <div className="w-full h-full bg-gradient-to-br from-neon-pink/40 to-neon-blue/40 flex items-center justify-center text-4xl font-black text-white">
+                  {username?.[0]?.toUpperCase() || '?'}
                 </div>
               )}
             </div>
+            {/* Level badge */}
+            <div className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-neon-pink flex items-center justify-center text-xs font-black text-white shadow-lg shadow-neon-pink/40">
+              {level}
+            </div>
           </div>
-          <div className="text-center">
-            <p className="text-neutral-400 font-mono text-sm tracking-wider">{user.email}</p>
+
+          {/* Info */}
+          <div className="flex-1 text-center sm:text-left">
+            <h1 className="text-3xl font-black text-white tracking-tight">{username}</h1>
+            <p className="text-white/40 text-sm mt-0.5">{user.email}</p>
+            {joinDate && (
+              <p className="text-white/30 text-xs mt-1">Member since {joinDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
+            )}
+
+            {/* XP bar */}
+            <div className="mt-3 max-w-xs mx-auto sm:mx-0">
+              <div className="flex justify-between text-xs text-white/40 mb-1">
+                <span>Level {level}</span>
+                <span>{xp.toLocaleString()} XP</span>
+              </div>
+              <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-neon-pink to-neon-blue transition-all duration-700"
+                  style={{ width: `${levelProgress}%` }}
+                />
+              </div>
+              <p className="text-[10px] text-white/30 mt-1">Level {level + 1} →</p>
+            </div>
+          </div>
+
+          {/* Quick stats */}
+          <div className="flex gap-3 shrink-0">
+            <div className="text-center">
+              <p className="text-2xl font-black text-white">{unlockedCount}</p>
+              <p className="text-[10px] text-white/40">Achievements</p>
+            </div>
+            <div className="w-px bg-white/10" />
+            <div className="text-center">
+              <p className="text-2xl font-black text-white">{seenIds.size}</p>
+              <p className="text-[10px] text-white/40">Watched</p>
+            </div>
+            <div className="w-px bg-white/10" />
+            <div className="text-center">
+              <p className="text-2xl font-black text-white">{favorites.length}</p>
+              <p className="text-[10px] text-white/40">Saved</p>
+            </div>
           </div>
         </div>
+      </div>
 
-        <div className="space-y-6">
-          <div className="space-y-2">
-            <label htmlFor="username" className="text-xs font-bold text-neutral-400 uppercase tracking-wider ml-1">Username</label>
-            <input
-              id="username"
-              type="text"
-              value={username || ''}
-              onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-6 py-4 bg-black/40 border border-white/10 rounded-xl text-white placeholder-neutral-600 focus:outline-none focus:border-neon-blue focus:ring-1 focus:ring-neon-blue/50 transition-all duration-300 font-medium"
-              placeholder="Enter username"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="avatar" className="text-xs font-bold text-neutral-400 uppercase tracking-wider ml-1">Avatar URL</label>
-            <input
-              id="avatar"
-              type="url"
-              value={avatarUrl || ''}
-              onChange={(e) => setAvatarUrl(e.target.value)}
-              className="w-full px-6 py-4 bg-black/40 border border-white/10 rounded-xl text-white placeholder-neutral-600 focus:outline-none focus:border-neon-blue focus:ring-1 focus:ring-neon-blue/50 transition-all duration-300 font-mono text-sm"
-              placeholder="https://example.com/image.jpg"
-            />
-          </div>
-
+      {/* Tabs */}
+      <div className="flex gap-1 bg-white/5 p-1 rounded-2xl border border-white/10 mb-6 overflow-x-auto no-scrollbar">
+        {TABS.map(tab => (
           <button
-            type="submit"
-            disabled={updating}
-            className="w-full py-4 bg-neon-pink hover:bg-red-600 text-white rounded-xl font-bold text-lg shadow-[0_0_20px_rgba(255,47,86,0.3)] hover:shadow-[0_0_30px_rgba(255,47,86,0.5)] hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed mt-4"
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-bold whitespace-nowrap transition-all duration-200 ${
+              activeTab === tab
+                ? 'bg-white text-black shadow'
+                : 'text-white/40 hover:text-white'
+            }`}
           >
-            {updating ? 'SAVING...' : 'UPDATE PROFILE'}
+            {tab}
           </button>
+        ))}
+      </div>
+
+      {/* Overview */}
+      {activeTab === 'Overview' && (
+        <div className="space-y-6">
+          {/* Stats grid */}
+          <div className="flex gap-3 flex-wrap">
+            <StatCard label="Total XP" value={xp.toLocaleString()} icon="⚡" />
+            <StatCard label="Challenges" value={stats.challengesCompleted || 0} icon="🎯" />
+            <StatCard label="Day Streak" value={stats.dailyStreak || 0} icon="🔥" />
+            <StatCard label="Videos Watched" value={seenIds.size} icon="▶️" />
+          </div>
+
+          <div className="flex gap-3 flex-wrap">
+            <StatCard label="Nuclear Watched" value={stats.nuclearVideosWatched || 0} icon="☢️" />
+            <StatCard label="Fire Watched" value={stats.fireVideosWatched || 0} icon="🔥" />
+            <StatCard label="Saved Videos" value={favorites.length} icon="❤️" />
+            <StatCard label="Fav Subreddits" value={favoriteSubreddits.length} icon="⭐" />
+          </div>
+
+          {/* Recent achievements */}
+          {unlockedCount > 0 && (
+            <div>
+              <h3 className="text-sm font-bold text-white/50 uppercase tracking-wider mb-3">Recent Achievements</h3>
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+                {sortedAchievements.filter(a => unlockedAchievements.includes(a.id)).slice(0, 5).map(a => (
+                  <AchievementCard key={a.id} achievement={a} unlocked progress={100} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Favorite subreddits preview */}
+          {favoriteSubreddits.length > 0 && (
+            <div>
+              <h3 className="text-sm font-bold text-white/50 uppercase tracking-wider mb-3">Favorite Subreddits</h3>
+              <div className="flex flex-wrap gap-2">
+                {favoriteSubreddits.slice(0, 8).map(sub => (
+                  <span key={sub} className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white/70">
+                    r/{sub}
+                  </span>
+                ))}
+                {favoriteSubreddits.length > 8 && (
+                  <button onClick={() => setActiveTab('Subreddits')} className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white/40 hover:text-white transition-colors">
+                    +{favoriteSubreddits.length - 8} more
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
-      </form>
+      )}
+
+      {/* Achievements */}
+      {activeTab === 'Achievements' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-white/40 text-sm">{unlockedCount} / {totalAchievements} unlocked</p>
+            <div className="flex gap-2">
+              {TIER_ORDER.map(tier => (
+                <span key={tier} className="flex items-center gap-1 text-xs text-white/40">
+                  <span className="w-2 h-2 rounded-full inline-block" style={{ background: ACHIEVEMENT_TIERS[tier].color }} />
+                  {ACHIEVEMENT_TIERS[tier].label}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
+            {sortedAchievements.map(a => (
+              <AchievementCard
+                key={a.id}
+                achievement={a}
+                unlocked={unlockedAchievements.includes(a.id)}
+                progress={getProgress(a.id)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Favorites */}
+      {activeTab === 'Favorites' && (
+        <div>
+          {favorites.length === 0 ? (
+            <div className="flex flex-col items-center py-20 gap-3 text-white/30">
+              <span className="text-5xl">❤️</span>
+              <p>No saved videos yet</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {favorites.map(vid => (
+                <div
+                  key={vid.id}
+                  onClick={() => setSelectedVideo(vid)}
+                  className="group relative aspect-[9/16] bg-black rounded-2xl overflow-hidden border border-white/5 hover:border-white/20 cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+                >
+                  {vid.thumbnail ? (
+                    <img src={vid.thumbnail} alt={vid.title} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-white/5 flex items-center justify-center text-3xl">▶️</div>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <div className="absolute bottom-0 left-0 right-0 p-3 translate-y-2 group-hover:translate-y-0 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                    <p className="text-xs text-white font-medium line-clamp-2">{vid.title}</p>
+                    <p className="text-[10px] text-white/50 mt-0.5">r/{vid.subreddit}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Subreddits */}
+      {activeTab === 'Subreddits' && (
+        <div>
+          {favoriteSubreddits.length === 0 ? (
+            <div className="flex flex-col items-center py-20 gap-3 text-white/30">
+              <span className="text-5xl">⭐</span>
+              <p>No favorite subreddits yet</p>
+              <p className="text-sm">Star subreddits from the Browse bar to save them here</p>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-3">
+              {favoriteSubreddits.map(sub => (
+                <div key={sub} className="group flex items-center gap-2 px-4 py-2.5 bg-white/5 border border-white/10 hover:border-white/20 rounded-xl transition-all">
+                  <span className="text-sm font-medium text-white">r/{sub}</span>
+                  <button
+                    onClick={() => removeFavoriteSubreddit(sub)}
+                    className="text-white/20 hover:text-red-400 transition-colors text-lg leading-none opacity-0 group-hover:opacity-100"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Settings */}
+      {activeTab === 'Settings' && (
+        <div className="max-w-md mx-auto">
+          <form onSubmit={saveProfile} className="space-y-5">
+            {/* Avatar preview */}
+            <div className="flex items-center gap-4 p-4 bg-white/5 border border-white/10 rounded-2xl">
+              <div className="w-16 h-16 rounded-xl overflow-hidden border border-white/10 shrink-0">
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="preview" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-neon-pink/40 to-neon-blue/40 flex items-center justify-center text-2xl font-black text-white">
+                    {username?.[0]?.toUpperCase() || '?'}
+                  </div>
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-bold text-white">{username || 'Username'}</p>
+                <p className="text-xs text-white/40">{user.email}</p>
+                <p className="text-xs text-white/30 mt-0.5">Level {level} · {xp.toLocaleString()} XP</p>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-white/40 uppercase tracking-wider">Username</label>
+              <input
+                type="text"
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/20 focus:outline-none focus:border-neon-blue transition-colors"
+                placeholder="Enter username"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-white/40 uppercase tracking-wider">Avatar URL</label>
+              <input
+                type="url"
+                value={avatarUrl}
+                onChange={e => setAvatarUrl(e.target.value)}
+                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-white/20 focus:outline-none focus:border-neon-blue transition-colors font-mono text-sm"
+                placeholder="https://..."
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={updating}
+              className="w-full py-3 bg-neon-pink hover:bg-red-600 text-white rounded-xl font-bold transition-all duration-300 disabled:opacity-50 shadow-lg shadow-neon-pink/20"
+            >
+              {updating ? 'Saving...' : updateMsg || 'Save Changes'}
+            </button>
+
+            <div className="pt-4 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => auth.signOut()}
+                className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 hover:text-white rounded-xl font-bold transition-all duration-300"
+              >
+                Sign Out
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {selectedVideo && <VideoModal video={selectedVideo} onClose={() => setSelectedVideo(null)} />}
     </div>
   );
 }
