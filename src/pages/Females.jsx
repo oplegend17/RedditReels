@@ -4,13 +4,43 @@ import { useFavorites } from '../lib/useFavorites';
 
 const BACKEND = import.meta.env.VITE_BACKEND_API_URL;
 
-// Curated female-oriented mood categories based on research
+// Curated female-oriented mood categories — centered on male content women actually want
 const MOODS = [
+  {
+    id: 'hot-guys',
+    label: 'Hot Guys',
+    icon: '🔥',
+    desc: 'Attractive men, the female gaze',
+    subreddits: ['ladybonersgw', 'MenGW', 'chickflixxx', 'ladyboners', 'malehairadvice'],
+    color: 'from-orange-500/20 to-red-500/20',
+    border: 'border-orange-500/40',
+    glow: 'rgba(249,115,22,0.35)',
+  },
+  {
+    id: 'big-dick',
+    label: 'Well Endowed',
+    icon: '😈',
+    desc: 'Big, thick, impressive',
+    subreddits: ['massivecock', 'bigdickproblems', 'monsterdicks', 'thickdick', 'amateurgirlsbigcocks'],
+    color: 'from-red-500/20 to-rose-500/20',
+    border: 'border-red-500/40',
+    glow: 'rgba(239,68,68,0.35)',
+  },
+  {
+    id: 'fit-body',
+    label: 'Fit & Muscular',
+    icon: '💪',
+    desc: 'Athletic bodies, abs, muscle',
+    subreddits: ['hardbodies', 'fitguys', 'gaybros', 'gaybrosgonewild', 'chickflixxx'],
+    color: 'from-amber-500/20 to-yellow-500/20',
+    border: 'border-amber-500/40',
+    glow: 'rgba(245,158,11,0.35)',
+  },
   {
     id: 'romantic',
     label: 'Romantic',
     icon: '🌹',
-    desc: 'Intimate, sensual, emotional connection',
+    desc: 'Intimate, sensual, emotional',
     subreddits: ['passionx', 'holdthemoan', 'GWCouples', 'gonewildcouples', 'gonemild'],
     color: 'from-rose-500/20 to-pink-500/20',
     border: 'border-rose-500/40',
@@ -18,30 +48,20 @@ const MOODS = [
   },
   {
     id: 'gentle-dom',
-    label: 'Gentle Dom',
+    label: 'Dominant Man',
     icon: '🎀',
-    desc: 'Assertive but caring, praise & aftercare',
-    subreddits: ['gentlefemdom', 'bdsmgw', 'collared', 'UnderwearGW'],
+    desc: 'Assertive, in control, caring',
+    subreddits: ['bdsmgw', 'gonewildaudio', 'passionx', 'holdthemoan'],
     color: 'from-purple-500/20 to-violet-500/20',
     border: 'border-purple-500/40',
     glow: 'rgba(168,85,247,0.3)',
-  },
-  {
-    id: 'female-gaze',
-    label: 'Female Gaze',
-    icon: '👀',
-    desc: 'Attractive men, for her eyes',
-    subreddits: ['ladybonersgw', 'chickflixxx', 'massivecock', 'MenGW'],
-    color: 'from-amber-500/20 to-orange-500/20',
-    border: 'border-amber-500/40',
-    glow: 'rgba(245,158,11,0.3)',
   },
   {
     id: 'couples',
     label: 'Couples',
     icon: '💑',
     desc: 'Real chemistry, mutual pleasure',
-    subreddits: ['GWCouples', 'gonewildcouples', 'gwcumsluts', 'WouldYouFuckMyWife'],
+    subreddits: ['GWCouples', 'gonewildcouples', 'couplesgonewild', 'passionx'],
     color: 'from-red-500/20 to-rose-500/20',
     border: 'border-red-500/40',
     glow: 'rgba(239,68,68,0.3)',
@@ -50,37 +70,17 @@ const MOODS = [
     id: 'pov',
     label: 'Her POV',
     icon: '🎬',
-    desc: 'Female perspective & female-initiated',
-    subreddits: ['femalepov', 'SheFucksHim', 'girlswhoriide', 'GirlsFinishingTheJob'],
+    desc: 'She rides, she leads, her pleasure',
+    subreddits: ['femalepov', 'SheFucksHim', 'GirlsFinishingTheJob', 'girlswhoriide'],
     color: 'from-cyan-500/20 to-blue-500/20',
     border: 'border-cyan-500/40',
     glow: 'rgba(6,182,212,0.3)',
   },
   {
-    id: 'sensual',
-    label: 'Sensual',
-    icon: '🕯️',
-    desc: 'Slow, teasing, body appreciation',
-    subreddits: ['gonewildcolor', 'altgonewild', 'GoneWild', 'normalnudes', 'sexybutnotporn'],
-    color: 'from-pink-500/20 to-fuchsia-500/20',
-    border: 'border-pink-500/40',
-    glow: 'rgba(236,72,153,0.3)',
-  },
-  {
-    id: 'lesbian',
-    label: 'Lesbian',
-    icon: '🏳️‍🌈',
-    desc: 'Women loving women',
-    subreddits: ['lesbians', 'dykesgonewild', 'StraightGirlsPlaying', 'girlskissing'],
-    color: 'from-fuchsia-500/20 to-pink-500/20',
-    border: 'border-fuchsia-500/40',
-    glow: 'rgba(217,70,239,0.3)',
-  },
-  {
     id: 'audio',
     label: 'Audio Erotica',
     icon: '🎧',
-    desc: 'Voice, imagination, GoneWildAudio',
+    desc: 'His voice, your imagination',
     subreddits: ['gonewildaudio'],
     color: 'from-green-500/20 to-emerald-500/20',
     border: 'border-green-500/40',
@@ -221,11 +221,11 @@ export default function Females() {
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(244,63,94,0.15),_transparent_60%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_rgba(168,85,247,0.1),_transparent_60%)]" />
         <div className="relative z-10">
-          <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-rose-300 via-pink-300 to-purple-300 mb-2">
-            For Her ✨
+          <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-300 via-rose-300 to-purple-300 mb-2">
+            For Her 🔥
           </h1>
           <p className="text-white/50 text-sm max-w-lg">
-            Curated content that centers female pleasure — romantic, sensual, and from her perspective.
+            Hot men, big energy, her pleasure — content curated from the female gaze.
           </p>
         </div>
       </div>

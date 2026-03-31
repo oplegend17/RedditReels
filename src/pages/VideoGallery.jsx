@@ -23,6 +23,8 @@ export default function VideoGallery() {
   const { isFavorite, addFavorite, removeFavorite } = useFavorites();
   const { favoriteSubreddits, addFavoriteSubreddit, removeFavoriteSubreddit, isFavoriteSubreddit } = useFavoriteSubreddits();
   const [showBrowser, setShowBrowser] = useState(false);
+  const [discordMode, setDiscordMode] = useState(false);
+  const [videoSizes, setVideoSizes] = useState({}); // id -> bytes | null
   const [customSubreddit, setCustomSubreddit] = useState('');
   const [usingCustomSubreddit, setUsingCustomSubreddit] = useState(false);
   const [customAfterId, setCustomAfterId] = useState(null);
@@ -196,8 +198,28 @@ export default function VideoGallery() {
     }
   };
 
-  const handleMoodSelect = (mood) => {
-    setSelectedMood(mood);
+  // Background size-check: HEAD each video URL we haven't checked yet
+  useEffect(() => {
+    if (!discordMode) return;
+    const unchecked = videos.filter(v => v.url && videoSizes[v.id] === undefined);
+    if (!unchecked.length) return;
+    unchecked.forEach(async (v) => {
+      try {
+        const res = await fetch(v.url, { method: 'HEAD' });
+        const cl = res.headers.get('content-length');
+        setVideoSizes(prev => ({ ...prev, [v.id]: cl ? parseInt(cl) : null }));
+      } catch {
+        setVideoSizes(prev => ({ ...prev, [v.id]: null }));
+      }
+    });
+  }, [videos, discordMode]);
+
+  // Clear sizes when video list resets
+  useEffect(() => {
+    setVideoSizes({});
+  }, [selectedSubreddit, selectedMood, usingCustomSubreddit, isSearchMode]);
+
+  const handleMoodSelect = (mood) => {    setSelectedMood(mood);
     setUsingCustomSubreddit(false);
     setIsSearchMode(false);
     setSearchQuery('');
@@ -448,6 +470,22 @@ export default function VideoGallery() {
           >
             GO
           </button>
+
+          <div className="w-px bg-white/20 h-6"></div>
+
+          {/* Discord mode toggle */}
+          <button
+            onClick={() => setDiscordMode(d => !d)}
+            title="Show only videos under 10MB (Discord safe)"
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all duration-200 border ${
+              discordMode
+                ? 'bg-indigo-500/20 border-indigo-500/60 text-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.3)]'
+                : 'bg-white/5 border-white/10 text-white/40 hover:text-white'
+            }`}
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057c.002.022.015.043.033.055a19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
+            &lt;10MB
+          </button>
         </div>
       </div>
 
@@ -483,29 +521,57 @@ export default function VideoGallery() {
       )}
 
       <Masonry breakpointCols={breakpointColumns} className="flex w-auto -ml-6" columnClassName="pl-6 bg-clip-padding">
-        {videos.map(vid => (
-          <div 
-            key={vid.id} 
-            className="group relative mb-6 bg-dark-card rounded-2xl overflow-hidden border border-white/5 shadow-lg transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_10px_40px_rgba(0,0,0,0.5)] hover:border-white/20 cursor-pointer"
-            onMouseEnter={() => setPlayingVideoId(vid.id)}
-            onMouseLeave={() => setPlayingVideoId(null)}
-            onClick={() => setSelectedVideo(vid)}
-          >
-            <div className="relative aspect-[9/16] bg-black">
-              <LazyVideo 
-                src={vid.url}
-                poster={vid.thumbnail}
-                isPlaying={playingVideoId === vid.id}
-                title={vid.title}
-                isLiked={isFavorite(vid.id)}
-                onToggleLike={(e) => handleFavoriteClick(e, vid)}
-                onDownload={(e) => handleDownload(e, vid)}
-                className="w-full h-full"
-                heat={vid.heat}
-              />
-            </div>
-          </div>
-        ))}
+        {videos
+          .filter(vid => {
+            if (!discordMode) return true;
+            const size = videoSizes[vid.id];
+            // Show if: size is known and under 10MB, OR size not yet checked (optimistic)
+            return size === undefined || (size !== null && size < 10 * 1024 * 1024);
+          })
+          .map(vid => {
+            const size = videoSizes[vid.id];
+            const sizeMB = size ? (size / (1024 * 1024)).toFixed(1) : null;
+            const isSmall = size !== null && size !== undefined && size < 10 * 1024 * 1024;
+            return (
+              <div
+                key={vid.id}
+                className="group relative mb-6 bg-dark-card rounded-2xl overflow-hidden border border-white/5 shadow-lg transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_10px_40px_rgba(0,0,0,0.5)] hover:border-white/20 cursor-pointer"
+                onMouseEnter={() => setPlayingVideoId(vid.id)}
+                onMouseLeave={() => setPlayingVideoId(null)}
+                onClick={() => setSelectedVideo(vid)}
+              >
+                <div className="relative aspect-[9/16] bg-black">
+                  <LazyVideo
+                    src={vid.url}
+                    poster={vid.thumbnail}
+                    isPlaying={playingVideoId === vid.id}
+                    title={vid.title}
+                    isLiked={isFavorite(vid.id)}
+                    onToggleLike={(e) => handleFavoriteClick(e, vid)}
+                    onDownload={(e) => handleDownload(e, vid)}
+                    className="w-full h-full"
+                    heat={vid.heat}
+                  />
+                  {/* Size badge */}
+                  {sizeMB && (
+                    <div className={`absolute bottom-14 left-3 z-20 px-2 py-0.5 rounded-full text-[10px] font-bold backdrop-blur-sm border ${
+                      isSmall
+                        ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-300'
+                        : 'bg-white/10 border-white/10 text-white/40'
+                    }`}>
+                      {sizeMB}MB
+                    </div>
+                  )}
+                  {discordMode && size === undefined && (
+                    <div className="absolute bottom-14 left-3 z-20 px-2 py-0.5 rounded-full text-[10px] font-bold bg-white/5 border border-white/10 text-white/20">
+                      …
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        }
       </Masonry>
       <div ref={loadingRef} className="h-20 flex items-center justify-center">
         {isLoading && <div className="w-8 h-8 border-4 border-neon-pink border-t-transparent rounded-full animate-spin"></div>}
