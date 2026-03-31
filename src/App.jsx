@@ -12,6 +12,8 @@ import Stats from './pages/Stats';
 import Favorites from './components/Favorites';
 import UserProfile from './components/UserProfile';
 
+import { FEMALE_ORIENTED_SUBREDDITS } from './lib/subreddits';
+
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -67,6 +69,7 @@ function App() {
           <Route index element={<VideoGallery />} />
           <Route path="images" element={<ImageGallery />} />
           <Route path="reels" element={<Reels />} />
+          <Route path="females" element={<Reels subreddits={FEMALE_ORIENTED_SUBREDDITS} />} />
           <Route path="challenges" element={<ChallengeMode />} />
           <Route path="challenges/:challengeId" element={<ChallengeMode />} />
           <Route path="stats" element={<Stats />} />

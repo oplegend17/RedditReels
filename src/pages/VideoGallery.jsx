@@ -3,6 +3,7 @@ import Masonry from 'react-masonry-css';
 import { LazyVideo } from '../components/LazyMedia';
 import VideoModal from '../components/VideoModal';
 import { useFavorites } from '../lib/useFavorites';
+import { useFavoriteSubreddits } from '../lib/useFavoriteSubreddits';
 import { MOODS } from '../lib/subreddits';
 
 const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL;
@@ -19,6 +20,7 @@ export default function VideoGallery() {
   const [playingVideoId, setPlayingVideoId] = useState(null);
   const [selectedVideo, setSelectedVideo] = useState(null);
   const { isFavorite, addFavorite, removeFavorite } = useFavorites();
+  const { favoriteSubreddits, addFavoriteSubreddit, removeFavoriteSubreddit, isFavoriteSubreddit } = useFavoriteSubreddits();
   const [customSubreddit, setCustomSubreddit] = useState('');
   const [usingCustomSubreddit, setUsingCustomSubreddit] = useState(false);
   const [customAfterId, setCustomAfterId] = useState(null);
@@ -217,20 +219,51 @@ export default function VideoGallery() {
         </div>
 
         <div className="pointer-events-auto flex gap-4 bg-black/60 backdrop-blur-xl p-2 rounded-2xl border border-white/10 shadow-2xl mx-auto w-fit">
-          <select 
-            value={usingCustomSubreddit ? '' : selectedSubreddit}
-            onChange={(e) => {
-              setUsingCustomSubreddit(false);
-              setSelectedMood(null);
-              setSelectedSubreddit(e.target.value);
-            }}
-            className="bg-transparent text-white font-bold px-4 py-2 outline-none cursor-pointer"
-          >
-            <option value="" className="bg-black">Select Subreddit</option>
-            {availableSubreddits.map(sub => (
-              <option key={sub} value={sub} className="bg-black">r/{sub}</option>
-            ))}
-          </select>
+          <div className="flex items-center gap-2">
+            <select 
+              value={usingCustomSubreddit ? '' : selectedSubreddit}
+              onChange={(e) => {
+                setUsingCustomSubreddit(false);
+                setSelectedMood(null);
+                setSelectedSubreddit(e.target.value);
+              }}
+              className="bg-transparent text-white font-bold px-4 py-2 outline-none cursor-pointer"
+            >
+              <option value="" className="bg-black">Select Subreddit</option>
+              {favoriteSubreddits.length > 0 && (
+                <optgroup label="⭐ Favorites" className="bg-black">
+                  {favoriteSubreddits.map(sub => (
+                    <option key={`fav-${sub}`} value={sub} className="bg-black">r/{sub}</option>
+                  ))}
+                </optgroup>
+              )}
+              <optgroup label="All Subreddits" className="bg-black">
+                {availableSubreddits.map(sub => (
+                  <option key={sub} value={sub} className="bg-black">r/{sub}</option>
+                ))}
+              </optgroup>
+            </select>
+            
+            {selectedSubreddit && !usingCustomSubreddit && (
+              <button
+                onClick={() => {
+                  if (isFavoriteSubreddit(selectedSubreddit)) {
+                    removeFavoriteSubreddit(selectedSubreddit);
+                  } else {
+                    addFavoriteSubreddit(selectedSubreddit);
+                  }
+                }}
+                className={`transition-all duration-300 ${
+                  isFavoriteSubreddit(selectedSubreddit)
+                    ? 'text-yellow-400 hover:text-yellow-500'
+                    : 'text-white/30 hover:text-yellow-400'
+                }`}
+                title={isFavoriteSubreddit(selectedSubreddit) ? 'Remove from favorites' : 'Add to favorites'}
+              >
+                {isFavoriteSubreddit(selectedSubreddit) ? '⭐' : '☆'}
+              </button>
+            )}
+          </div>
           
           <div className="w-px bg-white/20"></div>
 
@@ -248,6 +281,27 @@ export default function VideoGallery() {
               }
             }}
           />
+
+          {customSubreddit.trim() && (
+            <button
+              onClick={() => {
+                const sub = customSubreddit.trim();
+                if (isFavoriteSubreddit(sub)) {
+                  removeFavoriteSubreddit(sub);
+                } else {
+                  addFavoriteSubreddit(sub);
+                }
+              }}
+              className={`transition-all duration-300 ${
+                isFavoriteSubreddit(customSubreddit.trim())
+                  ? 'text-yellow-400 hover:text-yellow-500'
+                  : 'text-white/30 hover:text-yellow-400'
+              }`}
+              title={isFavoriteSubreddit(customSubreddit.trim()) ? 'Remove from favorites' : 'Save to favorites'}
+            >
+              {isFavoriteSubreddit(customSubreddit.trim()) ? '⭐' : '☆'}
+            </button>
+          )}
           
           <button 
             onClick={() => {

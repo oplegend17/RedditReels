@@ -135,46 +135,79 @@ app.get("/api/reels/random", async (req, res) => {
     const defaultSubs = process.env.DEFAULT_SUBREDDITS
       ? process.env.DEFAULT_SUBREDDITS.split(",").map((s) => s.trim())
       : [];
-    if (!defaultSubs.length) {
+    
+    // Check for specific subreddits requested via query param
+    let targetSubs = [];
+    if (req.query.subreddits) {
+      targetSubs = req.query.subreddits.split(',').map(s => s.trim());
+    }
+
+    if (!targetSubs.length && !defaultSubs.length) {
       return res.status(400).json({ error: "No default subreddits configured" });
     }
-    // Randomly pick 2-3 subreddits
-    const numSubs = Math.min(3, defaultSubs.length);
-    const pickedSubs = [];
-    const used = new Set();
-    while (pickedSubs.length < numSubs) {
-      const idx = Math.floor(Math.random() * defaultSubs.length);
-      if (!used.has(idx)) {
-        pickedSubs.push(defaultSubs[idx]);
-        used.add(idx);
+
+    // If no specific subs requested, pick random ones from defaults
+    if (targetSubs.length === 0) {
+      const numSubs = Math.min(3, defaultSubs.length);
+      const used = new Set();
+      while (targetSubs.length < numSubs) {
+        const idx = Math.floor(Math.random() * defaultSubs.length);
+        if (!used.has(idx)) {
+          targetSubs.push(defaultSubs[idx]);
+          used.add(idx);
+        }
       }
     }
+    
+    // If specific subs requested, maybe limit to a random subset if it's too large to prevent timeouts
+    // For now, let's just take up to 5 random ones from the requested list
+    if (targetSubs.length > 5) {
+            const picked = [];
+            const used = new Set();
+            while (picked.length < 5) {
+                const idx = Math.floor(Math.random() * targetSubs.length);
+                if (!used.has(idx)) {
+                    picked.push(targetSubs[idx]);
+                    used.add(idx);
+                }
+            }
+            targetSubs = picked;
+    }
+
     const token = await getRedditAccessToken();
-    const limitPerSub = 2;
+    const limitPerSub = 5; // Increased to ensure we get playable videos
     // Fetch in parallel
-    const fetches = pickedSubs.map(async (sub) => {
-      const url = `https://oauth.reddit.com/r/${sub}/hot.json?limit=${limitPerSub}&raw_json=1`;
-      const response = await fetch(url, { headers: buildHeaders(token) });
-      if (!response.ok) return [];
-      const data = await response.json();
-      return (data?.data?.children || [])
-        .map(post => post?.data)
-        .filter(p => (p?.is_video && p?.media?.reddit_video?.fallback_url) || (p?.preview?.reddit_video_preview?.fallback_url))
-        .map(p => ({
-          id: p.id,
-          title: p.title,
-          url: p?.media?.reddit_video?.fallback_url || p?.preview?.reddit_video_preview?.fallback_url,
-          thumbnail: p?.preview?.images?.[0]?.source?.url?.replace(/&amp;/g, '&') || '',
-          subreddit: sub
-        }));
+    const fetches = targetSubs.map(async (sub) => {
+      try {
+        const url = `https://oauth.reddit.com/r/${sub}/hot.json?limit=${limitPerSub}&raw_json=1`;
+        const response = await fetch(url, { headers: buildHeaders(token) });
+        if (!response.ok) return [];
+        const data = await response.json();
+        return (data?.data?.children || [])
+            .map(post => post?.data)
+            .filter(p => (p?.is_video && p?.media?.reddit_video?.fallback_url) || (p?.preview?.reddit_video_preview?.fallback_url))
+            .map(p => ({
+            id: p.id,
+            title: p.title,
+            url: p?.media?.reddit_video?.fallback_url || p?.preview?.reddit_video_preview?.fallback_url,
+            thumbnail: p?.preview?.images?.[0]?.source?.url?.replace(/&amp;/g, '&') || '',
+            subreddit: sub
+            }));
+      } catch (e) {
+          console.error(`Failed to fetch from r/${sub}`, e);
+          return [];
+      }
     });
+    
     let allVideos = (await Promise.all(fetches)).flat();
-    // Shuffle and limit
+    
+    // Shuffle
     for (let i = allVideos.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [allVideos[i], allVideos[j]] = [allVideos[j], allVideos[i]];
     }
-    const result = allVideos.slice(0, 5);
+    
+    const result = allVideos.slice(0, 20); // increased limit to 20
     res.json({ reels: result });
   } catch (err) {
     console.error("❌ Error fetching random reels:", err);

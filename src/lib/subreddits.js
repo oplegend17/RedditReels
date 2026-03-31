@@ -99,3 +99,19 @@ export const ALL_SUBREDDITS = [
   'threesome', 'groupsex', 'gangbang', 'orgy',
   'cosplay', 'cosplaybutts', 'cosplaybabes'
 ];
+
+export const FEMALE_ORIENTED_SUBREDDITS = [
+  'chickflixxx',
+  'sensual',
+  'normalnudes',
+  'gonewild',
+  'passionx',
+  'foreplay',
+  'gentlefemdom',
+  'pillowtalkaudio',
+  'gwcouples', 
+  'sex_comics',
+  'ladybonersgw',
+  'dykesgonewild',
+  'baddragon'
+];

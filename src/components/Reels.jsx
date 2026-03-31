@@ -3,7 +3,7 @@ import { useFavorites } from '../lib/useFavorites';
 import { useHistory } from '../lib/useHistory';
 import { getIcon } from './GamificationIcons';
 
-export default function Reels() {
+export default function Reels({ subreddits = [] }) {
   const [videos, setVideos] = useState([]);
   const [videos2, setVideos2] = useState([]); // Second stream for Twin Cam
   const [loading, setLoading] = useState(true);
@@ -35,7 +35,12 @@ export default function Reels() {
       if (pageNum === 1 && stream === 1) setLoading(true);
       else setLoadingMore(true);
       
-      const res = await fetch(`${import.meta.env.VITE_BACKEND_API_URL}/api/reels/random`);
+      let url = `${import.meta.env.VITE_BACKEND_API_URL}/api/reels/random`;
+      if (subreddits.length > 0) {
+        url += `?subreddits=${subreddits.join(',')}`;
+      }
+
+      const res = await fetch(url);
       const data = await res.json();
       
       if (data?.reels?.length) {
@@ -78,12 +83,17 @@ export default function Reels() {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [isSeen]);
+  }, [isSeen, subreddits]);
 
   useEffect(() => {
+    // Reset state when subreddits change (i.e. switching between main Reels and Females section)
+    setVideos([]);
+    setVideos2([]);
+    setPage(1);
+    setPage2(1);
     fetchRandomReels(1, 1);
     fetchRandomReels(1, 2);
-  }, []); // Run once on mount
+  }, [subreddits]); // Run when subreddits prop changes
 
   // Observer for Stream 1
   useEffect(() => {
@@ -186,8 +196,25 @@ export default function Reels() {
   };
 
   if (loading && videos.length === 0) return (
-    <div className="h-screen w-full flex items-center justify-center bg-black text-neon-pink font-bold animate-pulse text-xl">
-      Loading Reels...
+    <div className="h-screen w-full flex items-center justify-center bg-black">
+      <div className="w-12 h-12 border-4 border-neon-pink border-t-transparent rounded-full animate-spin"></div>
+    </div>
+  );
+
+  if ((!loading && videos.length === 0) || error) return (
+    <div className="h-screen w-full flex flex-col items-center justify-center bg-black text-white gap-4 z-40 relative">
+      <div className="text-2xl font-bold text-neon-pink">{error || "No videos found"}</div>
+      <p className="text-neutral-400">Try checking your connection or selecting different content.</p>
+      <button 
+        onClick={() => {
+          setPage(1);
+          fetchRandomReels(1, 1);
+          if (viewMode === 'twin') fetchRandomReels(1, 2);
+        }}
+        className="px-6 py-2 bg-white/10 hover:bg-white/20 rounded-full font-bold transition-colors"
+      >
+        Retry
+      </button>
     </div>
   );
 
