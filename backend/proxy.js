@@ -274,7 +274,7 @@ app.get("/api/reels/random", async (req, res) => {
 
     // If no specific subs requested, pick random ones from defaults
     if (targetSubs.length === 0) {
-      const numSubs = Math.min(3, defaultSubs.length);
+      const numSubs = Math.min(6, defaultSubs.length);
       const used = new Set();
       while (targetSubs.length < numSubs) {
         const idx = Math.floor(Math.random() * defaultSubs.length);
@@ -285,42 +285,52 @@ app.get("/api/reels/random", async (req, res) => {
       }
     }
     
-    // If specific subs requested, maybe limit to a random subset if it's too large to prevent timeouts
-    // For now, let's just take up to 5 random ones from the requested list
-    if (targetSubs.length > 5) {
-            const picked = [];
-            const used = new Set();
-            while (picked.length < 5) {
-                const idx = Math.floor(Math.random() * targetSubs.length);
-                if (!used.has(idx)) {
-                    picked.push(targetSubs[idx]);
-                    used.add(idx);
-                }
-            }
-            targetSubs = picked;
+    if (targetSubs.length > 8) {
+      const picked = [];
+      const used = new Set();
+      while (picked.length < 8) {
+        const idx = Math.floor(Math.random() * targetSubs.length);
+        if (!used.has(idx)) {
+          picked.push(targetSubs[idx]);
+          used.add(idx);
+        }
+      }
+      targetSubs = picked;
     }
 
     const token = await getRedditAccessToken();
-    const limitPerSub = 5; // Increased to ensure we get playable videos
+    const limitPerSub = 25; // fetch more to ensure enough videos after filtering
     // Fetch in parallel
     const fetches = targetSubs.map(async (sub) => {
       try {
+        // Try 'hot' first, fall back to 'new' for more variety
         const url = `https://oauth.reddit.com/r/${sub}/hot.json?limit=${limitPerSub}&raw_json=1`;
         const response = await fetch(url, { headers: buildHeaders(token) });
         if (!response.ok) return [];
         const data = await response.json();
         return (data?.data?.children || [])
             .map(post => post?.data)
-            .filter(p => (p?.is_video && p?.media?.reddit_video?.fallback_url) || (p?.preview?.reddit_video_preview?.fallback_url))
+            .filter(p => {
+              if (!p) return false;
+              const u = p.url_overridden_by_dest || p.url || '';
+              return (
+                (p.is_video && p.media?.reddit_video?.fallback_url) ||
+                p.preview?.reddit_video_preview?.fallback_url ||
+                u.includes('redgifs.com') ||
+                u.includes('v.redd.it')
+              );
+            })
             .map(p => ({
-            id: p.id,
-            title: p.title,
-            url: p?.media?.reddit_video?.fallback_url || p?.preview?.reddit_video_preview?.fallback_url,
-            thumbnail: p?.preview?.images?.[0]?.source?.url?.replace(/&amp;/g, '&') || '',
-            subreddit: sub,
-            originalUrl: p.url_overridden_by_dest || p.url,
-            isRedgifs: (p.url_overridden_by_dest || p.url || '').includes('redgifs.com')
-            }));
+              id: p.id,
+              title: p.title,
+              url: p?.media?.reddit_video?.fallback_url || p?.preview?.reddit_video_preview?.fallback_url || '',
+              thumbnail: p?.preview?.images?.[0]?.source?.url?.replace(/&amp;/g, '&') || '',
+              subreddit: sub,
+              ups: p.ups || 0,
+              originalUrl: p.url_overridden_by_dest || p.url,
+              isRedgifs: (p.url_overridden_by_dest || p.url || '').includes('redgifs.com')
+            }))
+            .filter(p => p.url || p.isRedgifs);
       } catch (e) {
           console.error(`Failed to fetch from r/${sub}`, e);
           return [];
@@ -335,7 +345,7 @@ app.get("/api/reels/random", async (req, res) => {
       [allVideos[i], allVideos[j]] = [allVideos[j], allVideos[i]];
     }
     
-    const result = allVideos.slice(0, 20); // increased limit to 20
+    const result = allVideos.slice(0, 40);
     res.json({ reels: result });
   } catch (err) {
     console.error("❌ Error fetching random reels:", err);

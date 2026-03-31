@@ -3,154 +3,109 @@ import Hls from 'hls.js';
 import { useFavorites } from '../lib/useFavorites';
 import { useHistory } from '../lib/useHistory';
 import { getIcon } from './GamificationIcons';
-import { getRedditHlsUrl, isRedditUrl } from '../lib/media-utils';
+import { getRedgifsId } from '../lib/media-utils';
+
+const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL;
 
 export default function Reels({ subreddits = [] }) {
   const [videos, setVideos] = useState([]);
-  const [videos2, setVideos2] = useState([]); // Second stream for Twin Cam
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeVideoId, setActiveVideoId] = useState(null);
-  const [activeVideoId2, setActiveVideoId2] = useState(null); // Active ID for second stream
-  const [isMuted, setIsMuted] = useState(true);
-  const observerRef = useRef(null);
-  const observerRef2 = useRef(null);
-  const containerRef = useRef(null);
-  const containerRef2 = useRef(null);
-  const { favorites, addFavorite, removeFavorite, isFavorite } = useFavorites();
-  const { isSeen, markAsSeen } = useHistory();
-  const [page, setPage] = useState(1);
-  const [page2, setPage2] = useState(1);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [viewMode, setViewMode] = useState('single'); // 'single' | 'twin'
+  const [isMuted, setIsMuted] = useState(() => {
+    return localStorage.getItem('reels-muted') !== 'false';
+  });
   const [autoScroll, setAutoScroll] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const containerRef = useRef(null);
+  const fetchingRef = useRef(false); // prevent concurrent fetches
 
-  const calculateHeat = (ups) => {
-    if (ups > 5000) return 'nuclear';
-    if (ups > 1000) return 'fire';
-    if (ups > 500) return 'spicy';
-    return null;
-  };
+  const { addFavorite, removeFavorite, isFavorite } = useFavorites();
+  const { markAsSeen } = useHistory();
 
-  const fetchRandomReels = useCallback(async (pageNum = 1, stream = 1) => {
+  const fetchReels = useCallback(async (reset = false) => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+
     try {
-      if (pageNum === 1 && stream === 1) setLoading(true);
+      if (reset) setLoading(true);
       else setLoadingMore(true);
-      
-      let url = `${import.meta.env.VITE_BACKEND_API_URL}/api/reels/random`;
+
+      let url = `${BACKEND_API_URL}/api/reels/random`;
       if (subreddits.length > 0) {
         url += `?subreddits=${subreddits.join(',')}`;
       }
 
       const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      
-      if (data?.reels?.length) {
-        const newReels = data.reels.map(v => ({
-          ...v,
-          heat: calculateHeat(v.ups || Math.floor(Math.random() * 6000))
-        }));
 
-        // Filter out seen videos, but keep at least some if all are seen to avoid empty state
-        // In a real app, we'd request "unseen" from backend. Here we filter client side.
-        // If we filter too many, we might need to fetch again.
-        
-        const filterSeen = (list) => {
-          const unseen = list.filter(v => !isSeen(v.id));
-          // If we filtered everything, just return the original list (fallback)
-          return unseen.length > 0 ? unseen : list;
-        };
+      if (!data?.reels?.length) throw new Error('No reels returned');
 
-        if (stream === 1) {
-          setVideos(prev => {
-            const ids = new Set(prev.map(v => v.id));
-            // Filter duplicates from existing
-            const uniqueNew = newReels.filter(v => !ids.has(v.id));
-            const filtered = filterSeen(uniqueNew);
-            return [...prev, ...filtered];
-          });
-        } else {
-          setVideos2(prev => {
-            const ids = new Set(prev.map(v => v.id));
-            const uniqueNew = newReels.filter(v => !ids.has(v.id));
-            const filtered = filterSeen(uniqueNew);
-            return [...prev, ...filtered];
-          });
-        }
-      }
+      const newReels = data.reels.filter(v => v.id && (v.url || v.isRedgifs));
+
+      setVideos(prev => {
+        if (reset) return newReels;
+        const existingIds = new Set(prev.map(v => v.id));
+        const unique = newReels.filter(v => !existingIds.has(v.id));
+        return [...prev, ...unique];
+      });
+
+      if (reset) setError(null);
     } catch (err) {
-      console.error(err);
-      if (pageNum === 1) setError('Failed to load reels.');
+      console.error('Reels fetch error:', err);
+      if (reset) setError(err.message);
     } finally {
       setLoading(false);
       setLoadingMore(false);
+      fetchingRef.current = false;
     }
-  }, [isSeen, subreddits]);
+  }, [subreddits]);
 
+  // Reset and fetch when subreddits change
   useEffect(() => {
-    // Reset state when subreddits change (i.e. switching between main Reels and Females section)
     setVideos([]);
-    setVideos2([]);
-    setPage(1);
-    setPage2(1);
-    fetchRandomReels(1, 1);
-    fetchRandomReels(1, 2);
-  }, [subreddits]); // Run when subreddits prop changes
+    setActiveVideoId(null);
+    fetchReels(true);
+  }, [subreddits.join(',')]);
 
-  // Observer for Stream 1
+  // Intersection observer — track active video + load more
   useEffect(() => {
-    const options = { root: containerRef.current, threshold: 0.6 };
-    const handleIntersect = (entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          const videoId = entry.target.dataset.id;
-          setActiveVideoId(videoId);
-          markAsSeen(videoId); // Mark as seen when active
-          
-          const index = videos.findIndex(v => v.id === videoId);
-          if (index > videos.length - 4 && !loadingMore) {
-            setPage(p => p + 1);
-            fetchRandomReels(page + 1, 1);
-          }
-        }
-      });
-    };
-    const observer = new IntersectionObserver(handleIntersect, options);
-    observerRef.current = observer;
-    const elements = document.querySelectorAll('.reel-item-1');
-    elements.forEach(el => observer.observe(el));
-    return () => observer.disconnect();
-  }, [videos, loadingMore, page, fetchRandomReels, markAsSeen]);
+    if (!containerRef.current) return;
 
-  // Observer for Stream 2
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            const id = entry.target.dataset.id;
+            setActiveVideoId(id);
+            markAsSeen(id);
+          }
+        });
+      },
+      { root: containerRef.current, threshold: 0.6 }
+    );
+
+    const items = containerRef.current.querySelectorAll('[data-id]');
+    items.forEach(el => observer.observe(el));
+
+    return () => observer.disconnect();
+  }, [videos.length]); // only re-attach when video count changes
+
+  // Load more when near end
   useEffect(() => {
-    if (viewMode !== 'twin') return;
-    const options = { root: containerRef2.current, threshold: 0.6 };
-    const handleIntersect = (entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          const videoId = entry.target.dataset.id;
-          setActiveVideoId2(videoId);
-          markAsSeen(videoId); // Mark as seen when active
+    if (!containerRef.current || !activeVideoId) return;
+    const idx = videos.findIndex(v => v.id === activeVideoId);
+    if (idx >= videos.length - 4 && !loadingMore && !fetchingRef.current) {
+      fetchReels(false);
+    }
+  }, [activeVideoId]);
 
-          const index = videos2.findIndex(v => v.id === videoId);
-          if (index > videos2.length - 4 && !loadingMore) {
-            setPage2(p => p + 1);
-            fetchRandomReels(page2 + 1, 2);
-          }
-        }
-      });
-    };
-    const observer = new IntersectionObserver(handleIntersect, options);
-    observerRef2.current = observer;
-    const elements = document.querySelectorAll('.reel-item-2');
-    elements.forEach(el => observer.observe(el));
-    return () => observer.disconnect();
-  }, [videos2, loadingMore, page2, fetchRandomReels, viewMode, markAsSeen]);
-
-  const toggleMute = (e) => {
-    e.stopPropagation();
-    setIsMuted(!isMuted);
+  const toggleMute = () => {
+    setIsMuted(prev => {
+      localStorage.setItem('reels-muted', String(!prev));
+      return !prev;
+    });
   };
 
   const handleLike = async (e, video) => {
@@ -158,292 +113,270 @@ export default function Reels({ subreddits = [] }) {
     if (isFavorite(video.id)) {
       await removeFavorite(video.id);
     } else {
-      await addFavorite({ ...video, subreddit: video.subreddit });
+      await addFavorite({ id: video.id, title: video.title, url: video.url, thumbnail: video.thumbnail, subreddit: video.subreddit });
     }
   };
 
   const handleShare = async (e, video) => {
     e.stopPropagation();
-    const shareData = {
-      title: 'Check out this video on Reddit Reels!',
-      text: video.title,
-      url: window.location.origin + '/reels?video=' + video.id // Hypothetical deep link
-    };
-
-    if (navigator.share) {
-      try {
-        await navigator.share(shareData);
-      } catch (err) {
-        console.log('Error sharing:', err);
-      }
-    } else {
-      // Fallback to clipboard
-      try {
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: video.title, url: video.url });
+      } else {
         await navigator.clipboard.writeText(video.url);
-        alert('Video link copied to clipboard!');
-      } catch (err) {
-        console.error('Failed to copy:', err);
       }
-    }
+    } catch {}
   };
 
-  const handleVideoEnd = (streamId) => {
-    if (!autoScroll) return;
-    
-    const container = streamId === 1 ? containerRef.current : containerRef2.current;
-    if (container) {
-      const height = container.clientHeight;
-      container.scrollBy({ top: height, behavior: 'smooth' });
-    }
+  const scrollNext = () => {
+    if (!containerRef.current) return;
+    containerRef.current.scrollBy({ top: containerRef.current.clientHeight, behavior: 'smooth' });
   };
 
-  if (loading && videos.length === 0) return (
-    <div className="h-screen w-full flex items-center justify-center bg-black">
-      <div className="w-12 h-12 border-4 border-neon-pink border-t-transparent rounded-full animate-spin"></div>
+  if (loading) return (
+    <div className="fixed inset-0 z-40 bg-black flex items-center justify-center">
+      <div className="w-12 h-12 border-4 border-neon-pink border-t-transparent rounded-full animate-spin" />
     </div>
   );
 
-  if ((!loading && videos.length === 0) || error) return (
-    <div className="h-screen w-full flex flex-col items-center justify-center bg-black text-white gap-4 z-40 relative">
-      <div className="text-2xl font-bold text-neon-pink">{error || "No videos found"}</div>
-      <p className="text-neutral-400">Try checking your connection or selecting different content.</p>
-      <button 
-        onClick={() => {
-          setPage(1);
-          fetchRandomReels(1, 1);
-          if (viewMode === 'twin') fetchRandomReels(1, 2);
-        }}
-        className="px-6 py-2 bg-white/10 hover:bg-white/20 rounded-full font-bold transition-colors"
-      >
+  if (error || videos.length === 0) return (
+    <div className="fixed inset-0 z-40 bg-black flex flex-col items-center justify-center gap-4 text-white">
+      <p className="text-neon-pink text-xl font-bold">{error || 'No videos found'}</p>
+      <button onClick={() => fetchReels(true)} className="px-6 py-2 bg-white/10 hover:bg-white/20 rounded-full font-bold transition-colors">
         Retry
       </button>
     </div>
   );
 
   return (
-    <div className="fixed inset-0 z-40 bg-black flex flex-col md:flex-row">
+    <div className="fixed inset-0 z-40 bg-black">
       {/* Controls */}
-      <div className="absolute top-24 right-6 z-50 flex flex-col gap-4">
-        <button 
-          onClick={toggleMute}
-          className="w-12 h-12 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-white/10 transition-all shadow-lg"
-          title="Mute/Unmute"
-        >
-          {isMuted ? (
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" strokeDasharray="1 1" /><line x1="17" y1="17" x2="7" y2="7" /></svg>
-          ) : (
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
-          )}
-        </button>
-
-        <button 
-          onClick={() => setViewMode(viewMode === 'single' ? 'twin' : 'single')}
-          className={`w-12 h-12 rounded-full backdrop-blur-md border border-white/10 flex items-center justify-center text-white transition-all shadow-lg ${viewMode === 'twin' ? 'bg-neon-pink text-white border-neon-pink' : 'bg-black/40 hover:bg-white/10'}`}
-          title="Twin Cam Mode"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
-        </button>
-
-        <button 
-          onClick={() => setAutoScroll(!autoScroll)}
-          className={`w-12 h-12 rounded-full backdrop-blur-md border border-white/10 flex items-center justify-center text-white transition-all shadow-lg ${autoScroll ? 'bg-neon-blue text-black border-neon-blue' : 'bg-black/40 hover:bg-white/10'}`}
-          title="Auto Scroll"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
-        </button>
+      <div className="absolute top-24 right-4 z-50 flex flex-col gap-3">
+        <ControlBtn onClick={toggleMute} active={!isMuted} title={isMuted ? 'Unmute' : 'Mute'}>
+          {isMuted
+            ? <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><line x1="17" y1="17" x2="7" y2="7" stroke="currentColor" strokeWidth="2" /></svg>
+            : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>
+          }
+        </ControlBtn>
+        <ControlBtn onClick={() => setAutoScroll(p => !p)} active={autoScroll} title="Auto scroll">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
+        </ControlBtn>
+        <ControlBtn onClick={scrollNext} title="Next">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+        </ControlBtn>
       </div>
 
-      {/* Stream 1 */}
-      <div className={`h-full relative transition-all duration-500 ${viewMode === 'twin' ? 'w-full md:w-1/2 border-r border-white/10' : 'w-full'}`}>
-        <div 
-          ref={containerRef}
-          className="h-full w-full overflow-y-scroll snap-y snap-mandatory scroll-smooth no-scrollbar"
-        >
-          {videos.map((video) => (
-            <ReelItem 
-              key={video.id} 
-              video={video} 
-              isActive={activeVideoId === video.id} 
-              isMuted={isMuted}
-              onLike={handleLike}
-              onShare={handleShare}
-              isFavorite={isFavorite}
-              className="reel-item-1"
-              onEnded={() => handleVideoEnd(1)}
-            />
-          ))}
-        </div>
-      </div>
+      {/* Feed */}
+      <div
+        ref={containerRef}
+        className="h-full w-full overflow-y-scroll snap-y snap-mandatory no-scrollbar"
+      >
+        {videos.map(video => (
+          <ReelItem
+            key={video.id}
+            video={video}
+            isActive={activeVideoId === video.id}
+            isMuted={isMuted}
+            autoScroll={autoScroll}
+            onScrollNext={scrollNext}
+            onLike={handleLike}
+            onShare={handleShare}
+            isFavorite={isFavorite}
+          />
+        ))}
 
-      {/* Stream 2 (Twin Cam) */}
-      {viewMode === 'twin' && (
-        <div className="h-full w-full md:w-1/2 relative border-t md:border-t-0 md:border-l border-white/10">
-          <div 
-            ref={containerRef2}
-            className="h-full w-full overflow-y-scroll snap-y snap-mandatory scroll-smooth no-scrollbar"
-          >
-            {videos2.map((video) => (
-              <ReelItem 
-                key={video.id} 
-                video={video} 
-                isActive={activeVideoId2 === video.id} 
-                isMuted={isMuted}
-                onLike={handleLike}
-                onShare={handleShare}
-                isFavorite={isFavorite}
-                className="reel-item-2"
-                onEnded={() => handleVideoEnd(2)}
-              />
-            ))}
+        {loadingMore && (
+          <div className="h-screen w-full snap-center flex items-center justify-center bg-black">
+            <div className="w-8 h-8 border-4 border-neon-pink border-t-transparent rounded-full animate-spin" />
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
 
-function ReelItem({ video, isActive, isMuted, onLike, onShare, isFavorite, className, onEnded }) {
+function ControlBtn({ onClick, active, title, children }) {
   return (
-    <div 
-      data-id={video.id}
-      className={`${className} h-full w-full snap-center relative flex items-center justify-center bg-black`}
+    <button
+      onClick={onClick}
+      title={title}
+      className={`w-11 h-11 rounded-full backdrop-blur-md border flex items-center justify-center text-white transition-all shadow-lg ${
+        active ? 'bg-neon-pink/30 border-neon-pink' : 'bg-black/50 border-white/10 hover:bg-white/10'
+      }`}
     >
-      <div className="relative w-full h-full overflow-hidden bg-black">
-        <ReelVideo 
-          video={video} 
-          isActive={isActive} 
-          isMuted={isMuted}
-          onEnded={onEnded}
-        />
-        
-        <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/90 pointer-events-none" />
+      {children}
+    </button>
+  );
+}
 
-        {video.heat && (
-          <div className={`absolute top-6 left-6 z-20 w-2.5 h-2.5 rounded-full shadow-lg ${
-            video.heat === 'nuclear' ? 'bg-red-500 shadow-red-500/80' :
-            video.heat === 'fire'    ? 'bg-orange-400 shadow-orange-400/80' :
-                                       'bg-pink-500 shadow-pink-500/80'
-          }`} title={video.heat} />
-        )}
+function ReelItem({ video, isActive, isMuted, autoScroll, onScrollNext, onLike, onShare, isFavorite }) {
+  return (
+    <div
+      data-id={video.id}
+      className="h-screen w-full snap-center relative flex items-center justify-center bg-black overflow-hidden"
+    >
+      <ReelVideo
+        video={video}
+        isActive={isActive}
+        isMuted={isMuted}
+        autoScroll={autoScroll}
+        onScrollNext={onScrollNext}
+      />
 
-        <div className="absolute right-4 bottom-28 flex flex-col gap-6 items-center z-20">
-          <LikeButton 
-            isLiked={isFavorite(video.id)} 
-            onClick={(e) => onLike(e, video)} 
-          />
-          <button
-            onClick={(e) => onShare(e, video)}
-            className="w-12 h-12 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-white/10 transition-all shadow-lg"
-            title="Share"
-          >
-            {getIcon('share')}
-          </button>
-        </div>
+      {/* Gradient overlay */}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/80 pointer-events-none" />
 
-        <div className="absolute bottom-0 left-0 right-0 p-6 pb-24 md:pb-8 pointer-events-none">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-neon-blue to-blue-600 flex items-center justify-center text-white font-bold text-xs shadow-lg">
-              {video.subreddit[0].toUpperCase()}
-            </div>
-            <h3 className="text-white font-bold text-xs drop-shadow-md">r/{video.subreddit}</h3>
-          </div>
-          <h2 className="text-white text-sm font-bold leading-snug line-clamp-2 drop-shadow-lg mb-2">
-            {video.title}
-          </h2>
-        </div>
+      {/* Side actions */}
+      <div className="absolute right-4 bottom-32 flex flex-col gap-5 items-center z-20">
+        <LikeButton isLiked={isFavorite(video.id)} onClick={e => onLike(e, video)} />
+        <button
+          onClick={e => onShare(e, video)}
+          className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-md border border-white/10 flex items-center justify-center text-white hover:bg-white/10 transition-all"
+        >
+          {getIcon('share')}
+        </button>
+      </div>
+
+      {/* Info */}
+      <div className="absolute bottom-6 left-4 right-20 z-20 pointer-events-none">
+        <p className="text-white/60 text-xs font-bold mb-1">r/{video.subreddit}</p>
+        <p className="text-white text-sm font-medium line-clamp-2 leading-snug">{video.title}</p>
       </div>
     </div>
   );
 }
 
 function LikeButton({ isLiked, onClick }) {
-  const [isSplashing, setIsSplashing] = useState(false);
-
+  const [splash, setSplash] = useState(false);
   const handleClick = (e) => {
-    setIsSplashing(true);
-    setTimeout(() => setIsSplashing(false), 600);
+    setSplash(true);
+    setTimeout(() => setSplash(false), 600);
     onClick(e);
   };
-
   return (
-    <button 
-      className={`relative w-12 h-12 rounded-full flex items-center justify-center backdrop-blur-md border transition-all duration-300 overflow-hidden ${
-        isLiked 
-          ? 'bg-neon-pink/20 border-neon-pink text-neon-pink scale-110' 
-          : 'bg-black/40 border-white/10 text-white hover:bg-white/10'
-      } ${isSplashing ? 'liquid-active' : ''}`}
+    <button
       onClick={handleClick}
+      className={`relative w-11 h-11 rounded-full flex items-center justify-center backdrop-blur-md border transition-all overflow-hidden ${
+        isLiked ? 'bg-neon-pink/20 border-neon-pink text-neon-pink' : 'bg-black/50 border-white/10 text-white hover:bg-white/10'
+      } ${splash ? 'liquid-active' : ''}`}
     >
-      <div className="liquid-splash"></div>
-      <svg className={`w-6 h-6 relative z-10 ${isLiked ? 'fill-current' : ''}`} viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" fill="none">
+      <div className="liquid-splash" />
+      <svg className={`w-5 h-5 relative z-10 ${isLiked ? 'fill-current' : ''}`} viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" fill="none">
         <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
       </svg>
     </button>
   );
 }
 
-function ReelVideo({ video, isActive, isMuted, onEnded }) {
+function ReelVideo({ video, isActive, isMuted, autoScroll, onScrollNext }) {
   const videoRef = useRef(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentSrc, setCurrentSrc] = useState(video.url);
+  const hlsRef = useRef(null);
+  const [src, setSrc] = useState(null);
+  const [status, setStatus] = useState('loading'); // loading | playing | error
 
+  // Resolve the actual playable URL
   useEffect(() => {
+    setSrc(null);
+    setStatus('loading');
+
     if (video.isRedgifs && video.originalUrl) {
-        const id = getRedgifsId(video.originalUrl);
-        if (id) {
-            const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL;
-            fetch(`${BACKEND_API_URL}/api/redgifs/${id}`)
-                .then(r => r.json())
-                .then(d => {
-                    if (d.url) setCurrentSrc(d.url);
-                })
-                .catch(() => {});
-        }
-    } else {
-        setCurrentSrc(video.url);
+      const id = getRedgifsId(video.originalUrl);
+      if (id) {
+        fetch(`${BACKEND_API_URL}/api/redgifs/${id}`)
+          .then(r => r.json())
+          .then(d => {
+            if (d.url) setSrc(d.url);
+            else throw new Error('no url');
+          })
+          .catch(() => {
+            // Fall back to direct URL if we have one
+            if (video.url) setSrc(video.url);
+            else setStatus('error');
+          });
+        return;
+      }
     }
-  }, [video.url, video.isRedgifs, video.originalUrl]);
 
-  useEffect(() => {
-    if (!videoRef.current) return;
-    
-    const hlsSrc = isRedditUrl(currentSrc) ? getRedditHlsUrl(currentSrc) : currentSrc;
-    
-    let hls = null;
-    if (hlsSrc.includes('.m3u8')) {
-        if (Hls.isSupported()) {
-            hls = new Hls({
-                maxBufferLength: 30,
-                enableWorker: true
-            });
-            hls.loadSource(hlsSrc);
-            hls.attachMedia(videoRef.current);
-        } else if (videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
-            videoRef.current.src = hlsSrc;
-        }
+    if (video.url) {
+      setSrc(video.url);
     } else {
-        videoRef.current.src = currentSrc;
+      setStatus('error');
+    }
+  }, [video.id]);
+
+  // Attach src to video element
+  useEffect(() => {
+    if (!src || !videoRef.current) return;
+
+    // Destroy previous HLS instance
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+
+    if (src.includes('.m3u8')) {
+      if (Hls.isSupported()) {
+        const hls = new Hls({ maxBufferLength: 30, enableWorker: true });
+        hls.loadSource(src);
+        hls.attachMedia(videoRef.current);
+        hls.on(Hls.Events.ERROR, (_, data) => {
+          if (data.fatal) setStatus('error');
+        });
+        hlsRef.current = hls;
+      } else if (videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
+        videoRef.current.src = src;
+      } else {
+        setStatus('error');
+      }
+    } else {
+      videoRef.current.src = src;
     }
 
     return () => {
-        if (hls) hls.destroy();
-    };
-  }, [currentSrc]);
-
-  useEffect(() => {
-    if (isActive && videoRef.current) {
-      const playPromise = videoRef.current.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => setIsPlaying(true))
-          .catch(() => setIsPlaying(false));
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
       }
-    } else if (videoRef.current) {
+    };
+  }, [src]);
+
+  // Play/pause based on active state
+  useEffect(() => {
+    if (!videoRef.current || !src) return;
+
+    if (isActive) {
+      videoRef.current.muted = isMuted;
+      const play = () => {
+        videoRef.current?.play()
+          .then(() => setStatus('playing'))
+          .catch(() => {
+            // Autoplay blocked — try muted
+            if (videoRef.current) {
+              videoRef.current.muted = true;
+              videoRef.current.play()
+                .then(() => setStatus('playing'))
+                .catch(() => setStatus('error'));
+            }
+          });
+      };
+
+      // If video is ready, play immediately; otherwise wait for canplay
+      if (videoRef.current.readyState >= 3) {
+        play();
+      } else {
+        videoRef.current.addEventListener('canplay', play, { once: true });
+      }
+    } else {
       videoRef.current.pause();
       videoRef.current.currentTime = 0;
-      setIsPlaying(false);
+      setStatus('loading');
     }
-  }, [isActive]);
+  }, [isActive, src]);
+
+  // Sync mute state
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.muted = isMuted;
+  }, [isMuted]);
 
   return (
     <>
@@ -451,16 +384,25 @@ function ReelVideo({ video, isActive, isMuted, onEnded }) {
         ref={videoRef}
         poster={video.thumbnail}
         className="w-full h-full object-contain"
-        loop={false} // Disable loop for auto-scroll to work
-        muted={isMuted}
         playsInline
-        onEnded={onEnded}
+        loop={!autoScroll}
+        muted={isMuted}
+        onEnded={() => autoScroll && onScrollNext()}
+        onError={() => setStatus('error')}
       />
-      {!isPlaying && isActive && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-          <div className="w-16 h-16 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center animate-pulse">
-            <div className="w-8 h-8 border-4 border-white border-t-transparent rounded-full animate-spin" />
-          </div>
+
+      {/* Loading spinner */}
+      {isActive && status === 'loading' && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin" />
+        </div>
+      )}
+
+      {/* Error state */}
+      {status === 'error' && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 pointer-events-none">
+          <span className="text-3xl">⚠️</span>
+          <p className="text-white/40 text-sm">Video unavailable</p>
         </div>
       )}
     </>
