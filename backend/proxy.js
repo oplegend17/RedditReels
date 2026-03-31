@@ -2,6 +2,7 @@ import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
 import dotenv from "dotenv";
+import { DEFAULT_SUBREDDITS } from "./subreddits.js";
 
 dotenv.config();
 
@@ -74,17 +75,14 @@ app.get("/api/health", (req, res) => {
 
 // Subreddits list endpoint
 app.get("/api/subreddits", (req, res) => {
-  const defaultSubs = process.env.DEFAULT_SUBREDDITS
-    ? process.env.DEFAULT_SUBREDDITS.split(",").map((s) => s.trim())
-    : [];
-  res.json({ subreddits: defaultSubs });
+  res.json({ subreddits: DEFAULT_SUBREDDITS });
 });
 
 // Default subreddit route (uses OAuth)
 app.get("/api/reddit", async (req, res) => {
   try {
     const token = await getRedditAccessToken();
-    const defaultSubreddit = process.env.DEFAULT_SUBREDDITS.split(",")[0];
+    const defaultSubreddit = DEFAULT_SUBREDDITS[0];
     const url = `https://oauth.reddit.com/r/${defaultSubreddit}/hot.json?limit=${
       process.env.ITEMS_PER_PAGE || 30
     }`;
@@ -132,9 +130,7 @@ app.get("/api/reddit/:subreddit", async (req, res) => {
 // Random reels endpoint
 app.get("/api/reels/random", async (req, res) => {
   try {
-    const defaultSubs = process.env.DEFAULT_SUBREDDITS
-      ? process.env.DEFAULT_SUBREDDITS.split(",").map((s) => s.trim())
-      : [];
+    const defaultSubs = DEFAULT_SUBREDDITS;
     
     // Check for specific subreddits requested via query param
     let targetSubs = [];
@@ -211,6 +207,44 @@ app.get("/api/reels/random", async (req, res) => {
     res.json({ reels: result });
   } catch (err) {
     console.error("❌ Error fetching random reels:", err);
+    res.status(500).json({ error: err.toString() });
+  }
+});
+
+// Global search route (uses OAuth)
+app.get("/api/search", async (req, res) => {
+  try {
+    const token = await getRedditAccessToken();
+    const query = req.query.q || "";
+    const after = req.query.after || "";
+    const limit = 50;
+    
+    if (!query) {
+      return res.status(400).json({ error: "Missing search query" });
+    }
+
+    // Search globally across Reddit
+    // We add include_over_18=on to ensure NSFW results are returned
+    // and filters like is_video:yes to target the right media type
+    const searchQuery = `${query} nsfw:yes is_video:yes is_self:no`;
+    const url = `https://oauth.reddit.com/search.json?q=${encodeURIComponent(searchQuery)}&include_over_18=on&type=link&limit=${limit}&sort=relevance&t=all&raw_json=1${
+      after ? `&after=${after}` : ""
+    }`;
+    
+    console.log(`🔎 Searching Reddit with OAuth: ${url}`);
+    const response = await fetch(url, {
+      headers: buildHeaders(token),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Reddit API returned ${response.status} ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    console.error(`❌ Error searching Reddit: ${req.query.q}`);
+    console.error(err);
     res.status(500).json({ error: err.toString() });
   }
 });

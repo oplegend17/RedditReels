@@ -26,6 +26,10 @@ export default function VideoGallery() {
   const [customAfterId, setCustomAfterId] = useState(null);
   const [customHasMore, setCustomHasMore] = useState(true);
   const [selectedMood, setSelectedMood] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchMode, setIsSearchMode] = useState(false);
+  const [searchAfterId, setSearchAfterId] = useState(null);
+  const [searchHasMore, setSearchHasMore] = useState(true);
 
   useEffect(() => {
     const fetchSubreddits = async () => {
@@ -52,20 +56,33 @@ export default function VideoGallery() {
   const fetchVideos = async (isNewSubreddit = false) => {
     const isCustom = usingCustomSubreddit;
     const isMood = !!selectedMood;
+    const isSearch = isSearchMode;
     
     let sub = selectedSubreddit;
     if (isCustom) sub = customSubreddit.trim();
     if (isMood) sub = selectedMood.subreddits.join('+');
 
-    const after = (isCustom || isMood) ? (isNewSubreddit ? '' : customAfterId) : (isNewSubreddit ? '' : afterId);
-    const hasMoreCheck = (isCustom || isMood) ? (isNewSubreddit || customHasMore) : (isNewSubreddit || hasMore);
+    const after = isSearch ? (isNewSubreddit ? '' : searchAfterId) : 
+                (isCustom || isMood) ? (isNewSubreddit ? '' : customAfterId) : 
+                (isNewSubreddit ? '' : afterId);
+    
+    const hasMoreCheck = isSearch ? (isNewSubreddit || searchHasMore) :
+                       (isCustom || isMood) ? (isNewSubreddit || customHasMore) : 
+                       (isNewSubreddit || hasMore);
 
-    if (!sub || !hasMoreCheck) return;
+    if (!isSearch && (!sub || !hasMoreCheck)) return;
+    if (isSearch && (!searchQuery || !hasMoreCheck)) return;
 
     try {
       setIsLoading(true);
       setError(null);
-      const url = `${BACKEND_API_URL}/api/reddit/${sub}${after ? `?after=${after}` : ''}`;
+      
+      let url;
+      if (isSearch) {
+        url = `${BACKEND_API_URL}/api/search?q=${encodeURIComponent(searchQuery)}${after ? `&after=${after}` : ''}`;
+      } else {
+        url = `${BACKEND_API_URL}/api/reddit/${sub}${after ? `?after=${after}` : ''}`;
+      }
       const response = await fetch(url);
       if (!response.ok) throw new Error('Failed to fetch');
       const data = await response.json();
@@ -87,7 +104,10 @@ export default function VideoGallery() {
 
       const newAfter = data?.data?.after;
       
-      if (isCustom || isMood) {
+      if (isSearch) {
+        setSearchAfterId(newAfter);
+        setSearchHasMore(!!newAfter && vids.length > 0);
+      } else if (isCustom || isMood) {
         setCustomAfterId(newAfter);
         setCustomHasMore(!!newAfter && vids.length > 0);
       } else {
@@ -104,14 +124,16 @@ export default function VideoGallery() {
   };
 
   useEffect(() => {
-    if (selectedMood) {
+    if (isSearchMode) {
+      if (searchQuery) fetchVideos(true);
+    } else if (selectedMood) {
       fetchVideos(true);
     } else if (usingCustomSubreddit) {
       if (customSubreddit) fetchVideos(true);
     } else if (selectedSubreddit) {
       fetchVideos(true);
     }
-  }, [selectedSubreddit, usingCustomSubreddit, selectedMood]);
+  }, [selectedSubreddit, usingCustomSubreddit, selectedMood, isSearchMode]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -157,6 +179,7 @@ export default function VideoGallery() {
   const handleMoodSelect = (mood) => {
     setSelectedMood(mood);
     setUsingCustomSubreddit(false);
+    setIsSearchMode(false);
     setCustomSubreddit('');
     setVideos([]);
   };
@@ -207,9 +230,14 @@ export default function VideoGallery() {
             </button>
           ))}
           <button
-            onClick={() => { setSelectedMood(null); setUsingCustomSubreddit(false); setVideos([]); }}
+            onClick={() => { 
+                setSelectedMood(null); 
+                setUsingCustomSubreddit(false); 
+                setIsSearchMode(false);
+                setVideos([]); 
+            }}
             className={`px-5 py-2.5 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-300 border ${
-              !selectedMood && !usingCustomSubreddit
+              !selectedMood && !usingCustomSubreddit && !isSearchMode
                 ? 'bg-white text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.3)]'
                 : 'bg-black/60 text-neutral-400 border-white/10 hover:bg-white/10 hover:text-white backdrop-blur-xl'
             }`}
@@ -219,100 +247,143 @@ export default function VideoGallery() {
         </div>
 
         <div className="pointer-events-auto flex gap-4 bg-black/60 backdrop-blur-xl p-2 rounded-2xl border border-white/10 shadow-2xl mx-auto w-fit">
-          <div className="flex items-center gap-2">
-            <select 
-              value={usingCustomSubreddit ? '' : selectedSubreddit}
-              onChange={(e) => {
-                setUsingCustomSubreddit(false);
-                setSelectedMood(null);
-                setSelectedSubreddit(e.target.value);
-              }}
-              className="bg-transparent text-white font-bold px-4 py-2 outline-none cursor-pointer"
+          {/* Mode Switcher */}
+          <div className="flex bg-white/5 rounded-xl p-1">
+            <button 
+                onClick={() => setIsSearchMode(false)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${!isSearchMode ? 'bg-white text-black' : 'text-white/50 hover:text-white'}`}
             >
-              <option value="" className="bg-black">Select Subreddit</option>
-              {favoriteSubreddits.length > 0 && (
-                <optgroup label="⭐ Favorites" className="bg-black">
-                  {favoriteSubreddits.map(sub => (
-                    <option key={`fav-${sub}`} value={sub} className="bg-black">r/{sub}</option>
-                  ))}
-                </optgroup>
-              )}
-              <optgroup label="All Subreddits" className="bg-black">
-                {availableSubreddits.map(sub => (
-                  <option key={sub} value={sub} className="bg-black">r/{sub}</option>
-                ))}
-              </optgroup>
-            </select>
-            
-            {selectedSubreddit && !usingCustomSubreddit && (
-              <button
-                onClick={() => {
-                  if (isFavoriteSubreddit(selectedSubreddit)) {
-                    removeFavoriteSubreddit(selectedSubreddit);
-                  } else {
-                    addFavoriteSubreddit(selectedSubreddit);
-                  }
-                }}
-                className={`transition-all duration-300 ${
-                  isFavoriteSubreddit(selectedSubreddit)
-                    ? 'text-yellow-400 hover:text-yellow-500'
-                    : 'text-white/30 hover:text-yellow-400'
-                }`}
-                title={isFavoriteSubreddit(selectedSubreddit) ? 'Remove from favorites' : 'Add to favorites'}
-              >
-                {isFavoriteSubreddit(selectedSubreddit) ? '⭐' : '☆'}
-              </button>
-            )}
+                Browse
+            </button>
+            <button 
+                onClick={() => setIsSearchMode(true)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${isSearchMode ? 'bg-neon-blue text-black' : 'text-white/50 hover:text-white'}`}
+            >
+                Search
+            </button>
           </div>
-          
+
           <div className="w-px bg-white/20"></div>
 
-          <input
-            type="text"
-            placeholder="Custom r/..."
-            value={customSubreddit}
-            onChange={(e) => setCustomSubreddit(e.target.value)}
-            className="bg-transparent text-white px-4 py-2 outline-none w-32 focus:w-48 transition-all"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                setUsingCustomSubreddit(true);
-                setSelectedMood(null);
-                fetchVideos(true);
-              }
-            }}
-          />
+          {!isSearchMode ? (
+            <>
+              <div className="flex items-center gap-2">
+                <select 
+                  value={usingCustomSubreddit ? '' : selectedSubreddit}
+                  onChange={(e) => {
+                    setUsingCustomSubreddit(false);
+                    setSelectedMood(null);
+                    setSelectedSubreddit(e.target.value);
+                  }}
+                  className="bg-transparent text-white font-bold px-4 py-2 outline-none cursor-pointer"
+                >
+                  <option value="" className="bg-black">Select Subreddit</option>
+                  {favoriteSubreddits.length > 0 && (
+                    <optgroup label="⭐ Favorites" className="bg-black">
+                      {favoriteSubreddits.map(sub => (
+                        <option key={`fav-${sub}`} value={sub} className="bg-black">r/{sub}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  <optgroup label="All Subreddits" className="bg-black">
+                    {availableSubreddits.map(sub => (
+                      <option key={sub} value={sub} className="bg-black">r/{sub}</option>
+                    ))}
+                  </optgroup>
+                </select>
+                
+                {selectedSubreddit && !usingCustomSubreddit && (
+                  <button
+                    onClick={() => {
+                      if (isFavoriteSubreddit(selectedSubreddit)) {
+                        removeFavoriteSubreddit(selectedSubreddit);
+                      } else {
+                        addFavoriteSubreddit(selectedSubreddit);
+                      }
+                    }}
+                    className={`transition-all duration-300 ${
+                      isFavoriteSubreddit(selectedSubreddit)
+                        ? 'text-yellow-400 hover:text-yellow-500'
+                        : 'text-white/30 hover:text-yellow-400'
+                    }`}
+                    title={isFavoriteSubreddit(selectedSubreddit) ? 'Remove from favorites' : 'Add to favorites'}
+                  >
+                    {isFavoriteSubreddit(selectedSubreddit) ? '⭐' : '☆'}
+                  </button>
+                )}
+              </div>
+              
+              <div className="w-px bg-white/20"></div>
 
-          {customSubreddit.trim() && (
-            <button
-              onClick={() => {
-                const sub = customSubreddit.trim();
-                if (isFavoriteSubreddit(sub)) {
-                  removeFavoriteSubreddit(sub);
-                } else {
-                  addFavoriteSubreddit(sub);
-                }
-              }}
-              className={`transition-all duration-300 ${
-                isFavoriteSubreddit(customSubreddit.trim())
-                  ? 'text-yellow-400 hover:text-yellow-500'
-                  : 'text-white/30 hover:text-yellow-400'
-              }`}
-              title={isFavoriteSubreddit(customSubreddit.trim()) ? 'Remove from favorites' : 'Save to favorites'}
-            >
-              {isFavoriteSubreddit(customSubreddit.trim()) ? '⭐' : '☆'}
-            </button>
+              <input
+                type="text"
+                placeholder="Custom r/..."
+                value={customSubreddit}
+                onChange={(e) => setCustomSubreddit(e.target.value)}
+                className="bg-transparent text-white px-4 py-2 outline-none w-32 focus:w-48 transition-all"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    setUsingCustomSubreddit(true);
+                    setSelectedMood(null);
+                  }
+                }}
+              />
+
+              {customSubreddit.trim() && (
+                <button
+                  onClick={() => {
+                    const sub = customSubreddit.trim();
+                    if (isFavoriteSubreddit(sub)) {
+                      removeFavoriteSubreddit(sub);
+                    } else {
+                      addFavoriteSubreddit(sub);
+                    }
+                  }}
+                  className={`transition-all duration-300 ${
+                    isFavoriteSubreddit(customSubreddit.trim())
+                      ? 'text-yellow-400 hover:text-yellow-500'
+                      : 'text-white/30 hover:text-yellow-400'
+                  }`}
+                  title={isFavoriteSubreddit(customSubreddit.trim()) ? 'Remove from favorites' : 'Save to favorites'}
+                >
+                  {isFavoriteSubreddit(customSubreddit.trim()) ? '⭐' : '☆'}
+                </button>
+              )}
+              
+              <button 
+                onClick={() => {
+                  setUsingCustomSubreddit(true);
+                  setSelectedMood(null);
+                  fetchVideos(true);
+                }}
+                className="bg-white/10 hover:bg-white/20 px-4 rounded-xl text-sm font-bold transition-colors cursor-pointer"
+              >
+                GO
+              </button>
+            </>
+          ) : (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Search Reddit..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="bg-transparent text-white px-4 py-2 outline-none w-64 md:w-96 transition-all"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    fetchVideos(true);
+                  }
+                }}
+              />
+              <button 
+                onClick={() => fetchVideos(true)}
+                className="bg-neon-blue/20 hover:bg-neon-blue/40 text-neon-blue px-6 py-2 rounded-xl text-sm font-bold transition-all border border-neon-blue/30 cursor-pointer shadow-[0_0_15px_rgba(0,243,255,0.2)]"
+              >
+                SEARCH
+              </button>
+            </div>
           )}
-          
-          <button 
-            onClick={() => {
-              setUsingCustomSubreddit(true);
-              setSelectedMood(null);
-              fetchVideos(true);
-            }}
-            className="bg-white/10 hover:bg-white/20 px-4 rounded-xl text-sm font-bold transition-colors cursor-pointer"
-          >
-            GO
-          </button>
         </div>
       </div>
 
