@@ -235,12 +235,20 @@ export default function ChallengeMode() {
 
   // Handle challenge completion
   const handleChallengeComplete = useCallback(() => {
-    const challengeData = challenges.completeChallenge();
-    
-    // Record achievement progress
+    if (showResults) return; // prevent double-fire
+
+    const challengeData = {
+      challengeType: selectedChallenge?.id,
+      duration: challenges.elapsedTime,
+      videosWatched: challenges.videosWatched,
+      pauseCount: challenges.pauseCount,
+      skipCount: challenges.skipCount,
+    };
+
+    // Record achievement progress — pass raw seconds
     achievements.recordChallengeComplete(
-      challengeData.challengeType, 
-      Math.floor(challengeData.duration / 60)
+      challengeData.challengeType,
+      challengeData.duration
     );
 
     // Add to leaderboard
@@ -250,38 +258,33 @@ export default function ChallengeMode() {
       username: auth.currentUser?.displayName || 'Anonymous'
     });
 
-    // Show results
-    setResults({
-      ...challengeData,
-      success: true,
-      intensity: intensity.intensity
-    });
+    setResults({ ...challengeData, success: true, intensity: intensity.intensity });
     setShowResults(true);
-
-    // Reset
     intensity.reset();
-  }, [challenges, achievements, intensity]);
+  }, [showResults, selectedChallenge, challenges, achievements, intensity]);
 
   // Handle challenge failure
   const handleChallengeFail = useCallback((reason) => {
+    if (showResults) return;
+
     const challengeData = challenges.failChallenge(reason);
-    
-    setResults({
-      ...challengeData,
-      success: false,
-      intensity: intensity.intensity
-    });
+
+    // Still record partial progress for achievements
+    if (challengeData.duration > 30) {
+      achievements.recordChallengeComplete(challengeData.challengeType, challengeData.duration);
+    }
+
+    setResults({ ...challengeData, success: false, intensity: intensity.intensity });
     setShowResults(true);
-
     intensity.reset();
-  }, [challenges, intensity]);
+  }, [showResults, challenges, achievements, intensity]);
 
-  // Auto-complete when time runs out
+  // Auto-complete when time runs out — useChallenges sets state to 'complete' via its own effect
   useEffect(() => {
-    if (challenges.challengeState === 'complete') {
+    if (challenges.challengeState === 'complete' && !showResults) {
       handleChallengeComplete();
     }
-  }, [challenges.challengeState, handleChallengeComplete]);
+  }, [challenges.challengeState]);
 
   const handleToggleFavorite = async (e) => {
     e?.stopPropagation();
@@ -473,7 +476,7 @@ export default function ChallengeMode() {
               </div>
               <div className="text-center glass-panel p-4 rounded-xl">
                 <div className="text-4xl font-black text-green-500">
-                  {achievements.unlockedAchievements.length}
+                  +{achievements.newlyUnlocked.length > 0 ? achievements.newlyUnlocked.length : achievements.unlockedAchievements.length}
                 </div>
                 <div className="text-xs text-white/60 uppercase tracking-wider">Achievements</div>
               </div>
@@ -544,7 +547,10 @@ export default function ChallengeMode() {
 
       {/* Achievement Popups */}
       <AchievementPopup 
-        achievements={achievements.newlyUnlocked.map(id => achievements.allAchievements[id.toUpperCase().replace(/_/g, '_')])}
+        achievements={achievements.newlyUnlocked
+          .map(id => Object.values(achievements.allAchievements).find(a => a.id === id))
+          .filter(Boolean)
+        }
         onClose={() => {}}
       />
 

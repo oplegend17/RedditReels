@@ -1,10 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ACHIEVEMENTS, getUnlockedAchievements, getAchievementProgress } from './achievements';
+import { auth, db } from './firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 
 const STORAGE_KEY = 'reddit-reels-stats';
 const UNLOCKED_KEY = 'reddit-reels-unlocked-achievements';
 
 const DEFAULT_STATS = {
+  xp: 0,
   challengesCompleted: 0,
   nuclearVideosWatched: 0,
   fireVideosWatched: 0,
@@ -28,32 +32,64 @@ const DEFAULT_STATS = {
 
 export const useAchievements = () => {
   const [stats, setStats] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) : DEFAULT_STATS;
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      return saved ? { ...DEFAULT_STATS, ...JSON.parse(saved) } : DEFAULT_STATS;
+    } catch { return DEFAULT_STATS; }
   });
 
   const [unlockedAchievements, setUnlockedAchievements] = useState(() => {
-    const saved = localStorage.getItem(UNLOCKED_KEY);
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem(UNLOCKED_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
   });
 
   const [newlyUnlocked, setNewlyUnlocked] = useState([]);
+  const [user, setUser] = useState(null);
 
-  // Save stats to localStorage whenever they change
+  // Sync with Firebase on auth change
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(stats));
-  }, [stats]);
+    const unsub = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      if (!currentUser) return;
+      try {
+        const ref = doc(db, 'users', currentUser.uid, 'userData', 'achievements');
+        const snap = await getDoc(ref);
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.stats) {
+            const merged = { ...DEFAULT_STATS, ...data.stats };
+            setStats(merged);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+          }
+          if (data.unlocked) {
+            setUnlockedAchievements(data.unlocked);
+            localStorage.setItem(UNLOCKED_KEY, JSON.stringify(data.unlocked));
+          }
+        }
+      } catch (e) {
+        console.error('Error loading achievements from Firestore:', e);
+      }
+    });
+    return () => unsub();
+  }, []);
 
-  // Save unlocked achievements
-  useEffect(() => {
-    localStorage.setItem(UNLOCKED_KEY, JSON.stringify(unlockedAchievements));
-  }, [unlockedAchievements]);
+  // Persist stats to localStorage + Firestore
+  const persistStats = useCallback(async (newStats, newUnlocked) => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(newStats));
+    localStorage.setItem(UNLOCKED_KEY, JSON.stringify(newUnlocked));
+    if (user) {
+      try {
+        const ref = doc(db, 'users', user.uid, 'userData', 'achievements');
+        await setDoc(ref, { stats: newStats, unlocked: newUnlocked, updatedAt: new Date() }, { merge: true });
+      } catch (e) {
+        console.error('Error saving achievements:', e);
+      }
+    }
+  }, [user]);
 
-  // Calculate Level based on XP
-  // Level 1: 0-1000 XP
-  // Level 2: 1000-2500 XP
-  // Level 3: 2500-5000 XP
-  // etc.
+  // Level calculation
   const calculateLevel = useCallback((xp) => {
     if (!xp) return 1;
     return Math.floor(1 + Math.sqrt(xp / 500));
@@ -64,148 +100,165 @@ export const useAchievements = () => {
     const nextLevel = currentLevel + 1;
     const currentLevelXp = 500 * Math.pow(currentLevel - 1, 2);
     const nextLevelXp = 500 * Math.pow(nextLevel - 1, 2);
-    
     const progress = ((xp - currentLevelXp) / (nextLevelXp - currentLevelXp)) * 100;
     return Math.min(Math.max(progress, 0), 100);
   }, [calculateLevel]);
 
-  // Check for newly unlocked achievements
+  // Check for newly unlocked achievements whenever stats change
   useEffect(() => {
     const currentlyUnlocked = getUnlockedAchievements(stats);
     const newUnlocks = currentlyUnlocked.filter(id => !unlockedAchievements.includes(id));
-    
+
     if (newUnlocks.length > 0) {
-      setUnlockedAchievements(prev => [...prev, ...newUnlocks]);
-      setNewlyUnlocked(newUnlocks);
-      
-      // Award XP for new achievements
       let xpGain = 0;
       newUnlocks.forEach(id => {
-        const achievement = ACHIEVEMENTS[id];
-        if (achievement) {
-          xpGain += achievement.xp || 0;
-        }
+        const achievement = Object.values(ACHIEVEMENTS).find(a => a.id === id);
+        if (achievement) xpGain += achievement.xp || 0;
       });
 
-      if (xpGain > 0) {
-        setStats(prev => ({
-          ...prev,
-          xp: (prev.xp || 0) + xpGain
-        }));
-      }
-      
-      // Clear newly unlocked after showing animation
+      const updatedUnlocked = [...unlockedAchievements, ...newUnlocks];
+      setUnlockedAchievements(updatedUnlocked);
+      setNewlyUnlocked(newUnlocks);
       setTimeout(() => setNewlyUnlocked([]), 5000);
+
+      if (xpGain > 0) {
+        setStats(prev => {
+          const updated = { ...prev, xp: (prev.xp || 0) + xpGain };
+          persistStats(updated, updatedUnlocked);
+          return updated;
+        });
+      } else {
+        persistStats(stats, updatedUnlocked);
+      }
     }
-  }, [stats, unlockedAchievements]);
+  }, [stats]);
 
   const updateStats = useCallback((updates) => {
-    setStats(prev => ({ ...prev, ...updates }));
-  }, []);
+    setStats(prev => {
+      const updated = { ...prev, ...updates };
+      persistStats(updated, unlockedAchievements);
+      return updated;
+    });
+  }, [unlockedAchievements, persistStats]);
 
   const incrementStat = useCallback((statName, amount = 1) => {
-    setStats(prev => ({
-      ...prev,
-      [statName]: (prev[statName] || 0) + amount
-    }));
-  }, []);
+    setStats(prev => {
+      const updated = { ...prev, [statName]: (prev[statName] || 0) + amount };
+      persistStats(updated, unlockedAchievements);
+      return updated;
+    });
+  }, [unlockedAchievements, persistStats]);
 
   const recordVideoWatch = useCallback((heat) => {
-    if (heat === 'nuclear') incrementStat('nuclearVideosWatched');
-    if (heat === 'fire') incrementStat('fireVideosWatched');
-    if (heat === 'spicy') incrementStat('spicyVideosWatched');
-    
-    // Small XP gain for watching intense videos
-    if (heat === 'nuclear') incrementStat('xp', 10);
-    if (heat === 'fire') incrementStat('xp', 5);
-  }, [incrementStat]);
-
-  const recordChallengeComplete = useCallback((challengeType, duration = 0) => {
-    const today = new Date().toDateString();
-    
     setStats(prev => {
-      const newStats = { ...prev };
-      
-      // Base XP for completion
-      let xpGain = 100;
-      
-      // Bonus XP for duration (10 XP per minute)
-      if (duration > 0) {
-        xpGain += Math.floor(duration / 60) * 10;
+      const updated = { ...prev };
+      if (heat === 'nuclear') {
+        updated.nuclearVideosWatched = (prev.nuclearVideosWatched || 0) + 1;
+        updated.xp = (prev.xp || 0) + 10;
+      } else if (heat === 'fire') {
+        updated.fireVideosWatched = (prev.fireVideosWatched || 0) + 1;
+        updated.xp = (prev.xp || 0) + 5;
+      } else if (heat === 'spicy') {
+        updated.spicyVideosWatched = (prev.spicyVideosWatched || 0) + 1;
+        updated.xp = (prev.xp || 0) + 2;
+      }
+      persistStats(updated, unlockedAchievements);
+      return updated;
+    });
+  }, [unlockedAchievements, persistStats]);
+
+  const recordChallengeComplete = useCallback((challengeType, durationSeconds = 0) => {
+    const today = new Date().toDateString();
+    const durationMinutes = Math.floor(durationSeconds / 60);
+
+    setStats(prev => {
+      const updated = { ...prev };
+
+      // Base XP
+      let xpGain = 100 + durationMinutes * 10;
+      updated.xp = (prev.xp || 0) + xpGain;
+
+      // Total challenges
+      updated.challengesCompleted = (prev.challengesCompleted || 0) + 1;
+
+      // Per-type stat — map challengeType id to stat key
+      const typeStatMap = {
+        tryNotToCum: 'tryNotToCumCompleted',
+        enduranceRun: 'enduranceRunCompleted',
+        roulette: 'rouletteCompleted',
+        tenMinute: 'tenMinuteChallengeCompleted',
+        rapidFire: 'rapidFireCompleted',
+        noControl: 'noControlCompleted',
+      };
+      const typeKey = typeStatMap[challengeType];
+      if (typeKey) updated[typeKey] = (prev[typeKey] || 0) + 1;
+
+      // Roulette rounds (same as roulette completed for now)
+      if (challengeType === 'roulette') {
+        updated.rouletteRoundsCompleted = (prev.rouletteRoundsCompleted || 0) + 1;
       }
 
-      newStats.xp = (prev.xp || 0) + xpGain;
-      
-      // Increment total challenges
-      newStats.challengesCompleted = (prev.challengesCompleted || 0) + 1;
-      
-      // Increment specific challenge type
-      const typeKey = `${challengeType}Completed`;
-      newStats[typeKey] = (prev[typeKey] || 0) + 1;
-      
-      // Track consecutive challenges
-      if (prev.lastChallengeDate === today) {
-        newStats.currentConsecutive = (prev.currentConsecutive || 0) + 1;
-      } else {
-        newStats.currentConsecutive = 1;
+      // Endurance run duration record (in minutes)
+      if (challengeType === 'enduranceRun' && durationMinutes > (prev.enduranceRunMinutes || 0)) {
+        updated.enduranceRunMinutes = durationMinutes;
       }
-      newStats.consecutiveChallenges = Math.max(
+
+      // Consecutive challenges (same day)
+      if (prev.lastChallengeDate === today) {
+        updated.currentConsecutive = (prev.currentConsecutive || 0) + 1;
+      } else {
+        updated.currentConsecutive = 1;
+      }
+      updated.consecutiveChallenges = Math.max(
         prev.consecutiveChallenges || 0,
-        newStats.currentConsecutive
+        updated.currentConsecutive
       );
-      
-      // Update daily streak
+
+      // Daily streak
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
       const yesterdayStr = yesterday.toDateString();
-      
+
       if (prev.lastChallengeDate === yesterdayStr) {
-        newStats.dailyStreak = (prev.dailyStreak || 0) + 1;
-        // Streak bonus XP
-        newStats.xp += (newStats.dailyStreak * 50);
+        updated.dailyStreak = (prev.dailyStreak || 0) + 1;
+        updated.xp += updated.dailyStreak * 50; // streak bonus
       } else if (prev.lastChallengeDate !== today) {
-        newStats.dailyStreak = 1;
+        updated.dailyStreak = 1;
       }
-      
-      newStats.lastChallengeDate = today;
-      
-      // Track challenge dates for perfect week
-      const challengeDates = prev.challengeDates || [];
-      if (!challengeDates.includes(today)) {
-        challengeDates.push(today);
-      }
-      newStats.challengeDates = challengeDates.slice(-30); // Keep last 30 days
-      
-      // Calculate perfect days (consecutive days with at least one challenge)
-      const sortedDates = [...challengeDates].sort((a, b) => new Date(b) - new Date(a));
+      updated.lastChallengeDate = today;
+
+      // Challenge dates for perfect week tracking
+      const challengeDates = [...(prev.challengeDates || [])];
+      if (!challengeDates.includes(today)) challengeDates.push(today);
+      updated.challengeDates = challengeDates.slice(-30);
+
+      // Perfect days (consecutive days with at least one challenge)
+      const sorted = [...challengeDates].sort((a, b) => new Date(b) - new Date(a));
       let perfectDays = 0;
-      for (let i = 0; i < sortedDates.length; i++) {
-        const date = new Date(sortedDates[i]);
-        const expectedDate = new Date();
-        expectedDate.setDate(expectedDate.getDate() - i);
-        if (date.toDateString() === expectedDate.toDateString()) {
+      for (let i = 0; i < sorted.length; i++) {
+        const expected = new Date();
+        expected.setDate(expected.getDate() - i);
+        if (new Date(sorted[i]).toDateString() === expected.toDateString()) {
           perfectDays++;
-        } else {
-          break;
-        }
+        } else break;
       }
-      newStats.perfectDays = perfectDays;
-      
-      // Track duration for specific challenges
-      if (challengeType === 'enduranceRun' && duration > (prev.enduranceRunMinutes || 0)) {
-        newStats.enduranceRunMinutes = duration;
-      }
-      
-      return newStats;
+      updated.perfectDays = perfectDays;
+
+      persistStats(updated, unlockedAchievements);
+      return updated;
     });
-  }, []);
+  }, [unlockedAchievements, persistStats]);
 
   const recordContinuousWatch = useCallback((minutes) => {
-    setStats(prev => ({
-      ...prev,
-      continuousWatchMinutes: Math.max(prev.continuousWatchMinutes || 0, minutes)
-    }));
-  }, []);
+    setStats(prev => {
+      const updated = {
+        ...prev,
+        continuousWatchMinutes: Math.max(prev.continuousWatchMinutes || 0, minutes)
+      };
+      persistStats(updated, unlockedAchievements);
+      return updated;
+    });
+  }, [unlockedAchievements, persistStats]);
 
   const isUnlocked = useCallback((achievementId) => {
     return unlockedAchievements.includes(achievementId);
@@ -219,6 +272,8 @@ export const useAchievements = () => {
     setStats(DEFAULT_STATS);
     setUnlockedAchievements([]);
     setNewlyUnlocked([]);
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(UNLOCKED_KEY);
   }, []);
 
   return {
