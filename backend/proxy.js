@@ -2,7 +2,7 @@ import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
 import dotenv from "dotenv";
-import { DEFAULT_SUBREDDITS } from "./subreddits.js";
+import { DEFAULT_SUBREDDITS, SUBREDDIT_CATEGORIES } from "./subreddits.js";
 
 dotenv.config();
 
@@ -76,6 +76,11 @@ app.get("/api/health", (req, res) => {
 // Subreddits list endpoint
 app.get("/api/subreddits", (req, res) => {
   res.json({ subreddits: DEFAULT_SUBREDDITS });
+});
+
+// Subreddit categories endpoint
+app.get("/api/subreddits/categories", (req, res) => {
+  res.json({ categories: SUBREDDIT_CATEGORIES });
 });
 
 // Default subreddit route (uses OAuth)
