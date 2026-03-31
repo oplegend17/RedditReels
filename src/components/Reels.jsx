@@ -1,7 +1,9 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
+import Hls from 'hls.js';
 import { useFavorites } from '../lib/useFavorites';
 import { useHistory } from '../lib/useHistory';
 import { getIcon } from './GamificationIcons';
+import { getRedditHlsUrl, isRedditUrl } from '../lib/media-utils';
 
 export default function Reels({ subreddits = [] }) {
   const [videos, setVideos] = useState([]);
@@ -317,12 +319,11 @@ function ReelItem({ video, isActive, isMuted, onLike, onShare, isFavorite, class
         <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/90 pointer-events-none" />
 
         {video.heat && (
-          <div className={`absolute top-6 left-6 z-20 px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider text-white shadow-lg ${
-            video.heat === 'nuclear' ? 'badge-nuclear' : 
-            video.heat === 'fire' ? 'badge-fire' : 'badge-spicy'
-          }`}>
-            {video.heat === 'nuclear' ? '☢️ NUCLEAR' : video.heat === 'fire' ? '🔥🔥 FIRE' : '🌶️ SPICY'}
-          </div>
+          <div className={`absolute top-6 left-6 z-20 w-2.5 h-2.5 rounded-full shadow-lg ${
+            video.heat === 'nuclear' ? 'bg-red-500 shadow-red-500/80' :
+            video.heat === 'fire'    ? 'bg-orange-400 shadow-orange-400/80' :
+                                       'bg-pink-500 shadow-pink-500/80'
+          }`} title={video.heat} />
         )}
 
         <div className="absolute right-4 bottom-28 flex flex-col gap-6 items-center z-20">
@@ -384,18 +385,62 @@ function LikeButton({ isLiked, onClick }) {
 function ReelVideo({ video, isActive, isMuted, onEnded }) {
   const videoRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [currentSrc, setCurrentSrc] = useState(video.url);
 
   useEffect(() => {
-    if (isActive) {
-      const playPromise = videoRef.current?.play();
+    if (video.isRedgifs && video.originalUrl) {
+        const id = getRedgifsId(video.originalUrl);
+        if (id) {
+            const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL;
+            fetch(`${BACKEND_API_URL}/api/redgifs/${id}`)
+                .then(r => r.json())
+                .then(d => {
+                    if (d.url) setCurrentSrc(d.url);
+                })
+                .catch(() => {});
+        }
+    } else {
+        setCurrentSrc(video.url);
+    }
+  }, [video.url, video.isRedgifs, video.originalUrl]);
+
+  useEffect(() => {
+    if (!videoRef.current) return;
+    
+    const hlsSrc = isRedditUrl(currentSrc) ? getRedditHlsUrl(currentSrc) : currentSrc;
+    
+    let hls = null;
+    if (hlsSrc.includes('.m3u8')) {
+        if (Hls.isSupported()) {
+            hls = new Hls({
+                maxBufferLength: 30,
+                enableWorker: true
+            });
+            hls.loadSource(hlsSrc);
+            hls.attachMedia(videoRef.current);
+        } else if (videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
+            videoRef.current.src = hlsSrc;
+        }
+    } else {
+        videoRef.current.src = currentSrc;
+    }
+
+    return () => {
+        if (hls) hls.destroy();
+    };
+  }, [currentSrc]);
+
+  useEffect(() => {
+    if (isActive && videoRef.current) {
+      const playPromise = videoRef.current.play();
       if (playPromise !== undefined) {
         playPromise
           .then(() => setIsPlaying(true))
           .catch(() => setIsPlaying(false));
       }
-    } else {
-      videoRef.current?.pause();
-      if (videoRef.current) videoRef.current.currentTime = 0;
+    } else if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
       setIsPlaying(false);
     }
   }, [isActive]);
@@ -404,7 +449,6 @@ function ReelVideo({ video, isActive, isMuted, onEnded }) {
     <>
       <video
         ref={videoRef}
-        src={video.url}
         poster={video.thumbnail}
         className="w-full h-full object-contain"
         loop={false} // Disable loop for auto-scroll to work

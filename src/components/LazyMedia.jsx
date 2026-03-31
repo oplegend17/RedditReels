@@ -1,7 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
+import Hls from 'hls.js';
+import { getRedditHlsUrl, isRedditUrl, isRedgifsUrl, getRedgifsId } from '../lib/media-utils';
 
-export function LazyVideo({ src, poster, className, isPlaying, onToggleLike, isLiked, onDownload, title, heat }) {
+const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL;
+
+export function LazyVideo({ src, poster, className, isPlaying, onToggleLike, isLiked, onDownload, title, heat, originalUrl, isRedgifs }) {
   const [isLoaded, setIsLoaded] = useState(false);
+  const [currentSrc, setCurrentSrc] = useState(src);
   const [isSplashing, setIsSplashing] = useState(false);
   const videoRef = useRef(null);
   const containerRef = useRef(null);
@@ -25,18 +30,67 @@ export function LazyVideo({ src, poster, className, isPlaying, onToggleLike, isL
   }, []);
 
   useEffect(() => {
-    if (videoRef.current) {
+    if (isRedgifs && originalUrl) {
+        const id = getRedgifsId(originalUrl);
+        if (id) {
+            fetch(`${BACKEND_API_URL}/api/redgifs/${id}`)
+                .then(r => r.json())
+                .then(d => {
+                    if (d.url) setCurrentSrc(d.url);
+                })
+                .catch(() => {});
+        }
+    } else {
+        setCurrentSrc(src);
+    }
+  }, [src, isRedgifs, originalUrl]);
+
+  useEffect(() => {
+    if (!videoRef.current || !isLoaded) return;
+    
+    const hlsSrc = isRedditUrl(currentSrc) ? getRedditHlsUrl(currentSrc) : currentSrc;
+    
+    let hls = null;
+    if (hlsSrc.includes('.m3u8')) {
+        if (Hls.isSupported()) {
+            hls = new Hls({
+                maxBufferLength: 30,
+                maxMaxBufferLength: 60,
+                enableWorker: true
+            });
+            hls.loadSource(hlsSrc);
+            hls.attachMedia(videoRef.current);
+        } else if (videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
+            videoRef.current.src = hlsSrc;
+        }
+    } else {
+        videoRef.current.src = currentSrc;
+    }
+
+    return () => {
+        if (hls) hls.destroy();
+    };
+  }, [currentSrc, isLoaded]);
+
+  useEffect(() => {
+    if (videoRef.current && isLoaded) {
       if (isPlaying) {
         const playPromise = videoRef.current.play();
         if (playPromise !== undefined) {
-          playPromise.catch(() => {});
+          playPromise.catch((e) => {
+            // Auto-mute if browser blocks audio
+            if (e.name === 'NotAllowedError') {
+              videoRef.current.muted = true;
+              videoRef.current.play().catch(() => {});
+            }
+          });
         }
       } else {
         videoRef.current.pause();
         videoRef.current.currentTime = 0;
       }
     }
-  }, [isPlaying]);
+  }, [isPlaying, isLoaded]);
 
   const handleLike = (e) => {
     e.stopPropagation();
@@ -53,9 +107,7 @@ export function LazyVideo({ src, poster, className, isPlaying, onToggleLike, isL
         <>
           <video
             ref={videoRef}
-            src={src}
             poster={poster}
-            muted
             loop
             playsInline
             className="w-full h-full object-cover"
@@ -66,12 +118,11 @@ export function LazyVideo({ src, poster, className, isPlaying, onToggleLike, isL
 
           {/* Heat Badge */}
           {heat && (
-            <div className={`absolute top-3 left-3 z-20 px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-wider text-white shadow-lg ${
-              heat === 'nuclear' ? 'badge-nuclear' : 
-              heat === 'fire' ? 'badge-fire' : 'badge-spicy'
-            }`}>
-              {heat === 'nuclear' ? '☢️ NUCLEAR' : heat === 'fire' ? '🔥🔥 FIRE' : '🌶️ SPICY'}
-            </div>
+            <div className={`absolute top-3 left-3 z-20 w-2 h-2 rounded-full shadow-lg ${
+              heat === 'nuclear' ? 'bg-red-500 shadow-red-500/80' :
+              heat === 'fire'    ? 'bg-orange-400 shadow-orange-400/80' :
+                                   'bg-pink-500 shadow-pink-500/80'
+            }`} title={heat} />
           )}
 
           {/* Actions */}

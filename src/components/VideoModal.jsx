@@ -1,7 +1,12 @@
-import { useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import Hls from 'hls.js';
+import { getRedditHlsUrl, isRedditUrl, isRedgifsUrl, getRedgifsId } from '../lib/media-utils';
 
-export default function VideoModal({ video, onClose }) {
+const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL;
+
+export default function VideoModal({ video, onClose, isRedgifs, originalUrl }) {
   const videoRef = useRef(null);
+  const [currentSrc, setCurrentSrc] = useState(video.url);
 
   useEffect(() => {
     const handleEsc = (e) => {
@@ -12,12 +17,55 @@ export default function VideoModal({ video, onClose }) {
   }, [onClose]);
 
   useEffect(() => {
-    videoRef.current?.play();
-  }, []);
+    if (isRedgifs && originalUrl) {
+        const id = getRedgifsId(originalUrl);
+        if (id) {
+            fetch(`${BACKEND_API_URL}/api/redgifs/${id}`)
+                .then(r => r.json())
+                .then(d => {
+                    if (d.url) setCurrentSrc(d.url);
+                })
+                .catch(() => {});
+        }
+    } else {
+        setCurrentSrc(video.url);
+    }
+  }, [video.url, isRedgifs, originalUrl]);
+
+  useEffect(() => {
+    if (!videoRef.current) return;
+    
+    const hlsSrc = isRedditUrl(currentSrc) ? getRedditHlsUrl(currentSrc) : currentSrc;
+    
+    let hls = null;
+    if (hlsSrc.includes('.m3u8')) {
+        if (Hls.isSupported()) {
+            hls = new Hls();
+            hls.loadSource(hlsSrc);
+            hls.attachMedia(videoRef.current);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                videoRef.current.play().catch(e => {
+                  if (e.name === 'NotAllowedError') {
+                    videoRef.current.muted = true;
+                    videoRef.current.play();
+                  }
+                });
+            });
+        } else if (videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
+            videoRef.current.src = hlsSrc;
+        }
+    } else {
+        videoRef.current.src = currentSrc;
+    }
+
+    return () => {
+        if (hls) hls.destroy();
+    };
+  }, [currentSrc]);
 
   const handleDownload = async () => {
     try {
-      const response = await fetch(video.url);
+      const response = await fetch(currentSrc || video.url);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -62,14 +110,11 @@ export default function VideoModal({ video, onClose }) {
         <div className="order-1 md:order-2 relative rounded-2xl overflow-hidden shadow-2xl shadow-black/50 border border-white/5">
           <video
             ref={videoRef}
-            src={video.url}
             controls
             autoPlay
             loop
             className="max-h-[50vh] md:max-h-[80vh] w-auto object-contain bg-black"
-          >
-            <source src={video.url} type="video/mp4" />
-          </video>
+          />
         </div>
       </div>
     </div>

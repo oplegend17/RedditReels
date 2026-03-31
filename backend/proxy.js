@@ -2,15 +2,57 @@ import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
 import dotenv from "dotenv";
+import Cerebras from "@cerebras/cerebras_cloud_sdk";
 import { DEFAULT_SUBREDDITS, SUBREDDIT_CATEGORIES } from "./subreddits.js";
 
 dotenv.config();
 
 const app = express();
+app.use(express.json());
 const PORT = process.env.PORT || 3001;
+
+// Init Cerebras once and reuse
+const cerebras = new Cerebras({ apiKey: process.env.CEREBRAS_API_KEY });
+
+// Flatten all known subreddits for prompt context + validation
+const ALL_KNOWN_SUBS = [...new Set(Object.values(SUBREDDIT_CATEGORIES).flat())];
+
+// Simple in-memory cache: vibe string -> subreddits array
+const vibeCache = new Map();
 
 let redditAccessToken = null;
 let tokenExpiry = 0;
+
+let redgifsAccessToken = null;
+let redgifsTokenExpiry = 0;
+
+const browserUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+async function getRedgifsAccessToken() {
+  if (redgifsAccessToken && Date.now() < redgifsTokenExpiry) {
+    return redgifsAccessToken;
+  }
+  try {
+    const response = await fetch("https://api.redgifs.com/v2/auth/temporary", {
+      method: 'POST',
+      headers: {
+        'User-Agent': browserUA,
+        'Accept': 'application/json',
+        'Referer': 'https://www.redgifs.com/',
+        'Origin': 'https://www.redgifs.com'
+      }
+    });
+    if (!response.ok) throw new Error(`Auth failed with status: ${response.status}`);
+    const data = await response.json();
+    if (!data.token) throw new Error('No token in RedGifs response');
+    redgifsAccessToken = data.token;
+    redgifsTokenExpiry = Date.now() + 30 * 60 * 1000;
+    return redgifsAccessToken;
+  } catch (err) {
+    console.error("❌ RedGifs Auth Failure:", err.message);
+    return null;
+  }
+}
 
 async function getRedditAccessToken() {
   if (redditAccessToken && Date.now() < tokenExpiry) {
@@ -81,6 +123,77 @@ app.get("/api/subreddits", (req, res) => {
 // Subreddit categories endpoint
 app.get("/api/subreddits/categories", (req, res) => {
   res.json({ categories: SUBREDDIT_CATEGORIES });
+});
+
+// AI smart search endpoint — decides intent then acts
+app.post("/api/ai/mood", async (req, res) => {
+  const vibe = (req.body?.vibe || "").trim().slice(0, 200);
+  if (!vibe) return res.status(400).json({ error: "Missing vibe" });
+
+  const cacheKey = vibe.toLowerCase();
+  if (vibeCache.has(cacheKey)) {
+    return res.json({ ...vibeCache.get(cacheKey), cached: true });
+  }
+
+  const subList = ALL_KNOWN_SUBS.join(", ");
+
+  try {
+    const response = await cerebras.chat.completions.create({
+      model: "llama3.1-8b",
+      max_completion_tokens: 150,
+      temperature: 0.4,
+      messages: [
+        {
+          role: "system",
+          content: `You are a smart search router for an adult content platform.
+
+Given a user query, decide if it is:
+- "search": a specific keyword, name, pornstar, term, or short phrase the user wants to search Reddit for directly
+- "mood": a vibe, feeling, or descriptive natural language mood where you should pick matching subreddits
+
+If "search": return { "intent": "search", "query": "<the search term to use>" }
+If "mood": return { "intent": "mood", "subreddits": [5-8 names from this list: ${subList}] }
+
+Return ONLY valid JSON. No explanation, no markdown.`,
+        },
+        {
+          role: "user",
+          content: vibe,
+        },
+      ],
+    });
+
+    const raw = response.choices[0]?.message?.content?.trim() || "{}";
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error("No JSON in response");
+
+    const parsed = JSON.parse(match[0]);
+    console.log(`✨ AI intent [${vibe}] →`, parsed);
+
+    if (parsed.intent === "search" && parsed.query) {
+      const result = { intent: "search", query: parsed.query };
+      vibeCache.set(cacheKey, result);
+      return res.json(result);
+    }
+
+    if (parsed.intent === "mood" && Array.isArray(parsed.subreddits)) {
+      const knownLower = new Set(ALL_KNOWN_SUBS.map((s) => s.toLowerCase()));
+      const validated = parsed.subreddits
+        .filter((s) => typeof s === "string" && knownLower.has(s.toLowerCase()))
+        .slice(0, 8);
+
+      if (validated.length === 0) throw new Error("No valid subreddits");
+      const result = { intent: "mood", subreddits: validated };
+      vibeCache.set(cacheKey, result);
+      return res.json(result);
+    }
+
+    throw new Error("Unexpected response shape");
+  } catch (err) {
+    console.error("❌ AI smart search error:", err.message);
+    const fallback = DEFAULT_SUBREDDITS.sort(() => 0.5 - Math.random()).slice(0, 6);
+    res.json({ intent: "mood", subreddits: fallback, fallback: true });
+  }
 });
 
 // Default subreddit route (uses OAuth)
@@ -192,7 +305,9 @@ app.get("/api/reels/random", async (req, res) => {
             title: p.title,
             url: p?.media?.reddit_video?.fallback_url || p?.preview?.reddit_video_preview?.fallback_url,
             thumbnail: p?.preview?.images?.[0]?.source?.url?.replace(/&amp;/g, '&') || '',
-            subreddit: sub
+            subreddit: sub,
+            originalUrl: p.url_overridden_by_dest || p.url,
+            isRedgifs: (p.url_overridden_by_dest || p.url || '').includes('redgifs.com')
             }));
       } catch (e) {
           console.error(`Failed to fetch from r/${sub}`, e);
@@ -228,11 +343,8 @@ app.get("/api/search", async (req, res) => {
       return res.status(400).json({ error: "Missing search query" });
     }
 
-    // Search globally across Reddit
-    // We add include_over_18=on to ensure NSFW results are returned
-    // and filters like is_video:yes to target the right media type
-    const searchQuery = `${query} nsfw:yes is_video:yes is_self:no`;
-    const url = `https://oauth.reddit.com/search.json?q=${encodeURIComponent(searchQuery)}&include_over_18=on&type=link&limit=${limit}&sort=relevance&t=all&raw_json=1${
+    // Search globally across Reddit — keep query clean, filter media type on the frontend
+    const url = `https://oauth.reddit.com/search.json?q=${encodeURIComponent(query)}&include_over_18=on&type=link&limit=${limit}&sort=relevance&t=all&raw_json=1${
       after ? `&after=${after}` : ""
     }`;
     
@@ -251,6 +363,49 @@ app.get("/api/search", async (req, res) => {
     console.error(`❌ Error searching Reddit: ${req.query.q}`);
     console.error(err);
     res.status(500).json({ error: err.toString() });
+  }
+});
+
+// RedGifs metadata proxy
+app.get("/api/redgifs/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    const token = await getRedgifsAccessToken();
+    if (!token) throw new Error('Unauthorized - RedGifs token missing');
+    
+    // Exact official URL pattern
+    const url = `https://api.redgifs.com/v2/gifs/${id}?views=yes&users=yes&niches=yes`;
+    
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'User-Agent': browserUA,
+        'Accept': 'application/json',
+        'Referer': 'https://www.redgifs.com/',
+        'Origin': 'https://www.redgifs.com'
+      },
+    });
+
+    if (!response.ok) {
+       console.log(`⚠️ RedGifs API Error: ${response.status} for ID: ${id}`);
+       throw new Error(`RedGifs API returned ${response.status}`);
+    }
+
+    const data = await response.json();
+    const gif = data.gif || data;
+    
+    if (!gif?.urls) {
+        console.error("Malformed RedGifs response:", JSON.stringify(data).slice(0, 200));
+        throw new Error('Invalid RedGifs metadata structure');
+    }
+
+    res.json({ 
+      url: gif.urls.hd || gif.urls.sd || gif.urls.hls || gif.urls.vtt,
+      poster: gif.urls.poster || gif.urls.thumbnail 
+    });
+  } catch (err) {
+    console.error(`❌ RedGifs Proxy Error: ${id} ->`, err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 

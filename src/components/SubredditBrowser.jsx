@@ -3,7 +3,7 @@ import { useFavoriteSubreddits } from '../lib/useFavoriteSubreddits';
 
 const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL;
 
-export default function SubredditBrowser({ onSelect, onClose }) {
+export default function SubredditBrowser({ onSelect, onClose, onGlobalSearch }) {
   const [categories, setCategories] = useState({});
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState(null);
@@ -137,6 +137,20 @@ export default function SubredditBrowser({ onSelect, onClose }) {
             {/* Normal / search view */}
             {(searchResults || activeCategory !== '__favorites__') && (
               <div className="flex flex-wrap gap-2">
+                {search.trim() && (
+                  <button
+                    onClick={() => {
+                        onGlobalSearch(search);
+                        onClose();
+                    }}
+                    className="w-full mb-3 flex items-center justify-center gap-3 p-4 bg-neon-pink/10 hover:bg-neon-pink/20 border border-neon-pink/30 hover:border-neon-pink rounded-2xl text-neon-pink font-bold transition-all group"
+                  >
+                    <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    Search Reddit for "{search}"
+                  </button>
+                )}
                 {(searchResults || displayList).map(({ sub, category }) => (
                   <SubredditChip
                     key={`${category}-${sub}`}
