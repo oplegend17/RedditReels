@@ -306,7 +306,6 @@ export default function VideoGallery() {
   };
 
   const breakpointColumns = { default: 4, 1440: 3, 1100: 2, 700: 1 };
-
   const [showNav, setShowNav] = useState(true);
   const lastScrollY = useRef(0);
 
@@ -330,37 +329,37 @@ export default function VideoGallery() {
   return (
     <>
       <div 
-        className={`flex flex-col gap-4 mb-12 sticky top-20 z-30 transition-transform duration-300 ${
+        className={`flex flex-col gap-3 mb-8 sticky top-16 md:top-20 z-30 transition-transform duration-300 ${
           showNav ? 'translate-y-0' : '-translate-y-[200%]'
         }`}
       >
-        {/* Mood Selector */}
-        <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar max-w-full mx-auto">
+        {/* Mood pills — scrollable row */}
+        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
           {MOODS.map(mood => (
             <button
               key={mood.id}
               onClick={() => handleMoodSelect(mood)}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-300 border ${
+              className={`flex items-center gap-1.5 px-3 md:px-5 py-2 rounded-full text-xs md:text-sm font-bold whitespace-nowrap transition-all duration-300 border ${
                 selectedMood?.id === mood.id
                   ? 'bg-neon-pink text-white border-neon-pink shadow-[0_0_15px_rgba(255,47,86,0.4)] scale-105'
                   : 'bg-black/60 text-neutral-400 border-white/10 hover:bg-white/10 hover:text-white backdrop-blur-xl'
               }`}
             >
               <span>{mood.icon}</span>
-              <span>{mood.label}</span>
+              <span className="hidden sm:inline">{mood.label.replace(/^.+? /, '')}</span>
             </button>
           ))}
           <button
             onClick={() => { 
-                setSelectedMood(null); 
-                setUsingCustomSubreddit(false); 
-                setIsSearchMode(false);
-                setSearchQuery('');
-                setVideos([]); 
+              setSelectedMood(null); 
+              setUsingCustomSubreddit(false); 
+              setIsSearchMode(false);
+              setSearchQuery('');
+              setVideos([]); 
             }}
-            className={`px-5 py-2.5 rounded-full text-sm font-bold whitespace-nowrap transition-all duration-300 border ${
+            className={`px-3 md:px-5 py-2 rounded-full text-xs md:text-sm font-bold whitespace-nowrap transition-all duration-300 border ${
               !selectedMood && !usingCustomSubreddit && !isSearchMode
-                ? 'bg-white text-black border-white shadow-[0_0_15px_rgba(255,255,255,0.3)]'
+                ? 'bg-white text-black border-white'
                 : 'bg-black/60 text-neutral-400 border-white/10 hover:bg-white/10 hover:text-white backdrop-blur-xl'
             }`}
           >
@@ -368,63 +367,52 @@ export default function VideoGallery() {
           </button>
         </div>
 
-        <div className="flex items-center gap-2 bg-black/70 backdrop-blur-xl p-2 rounded-2xl border border-white/10 shadow-2xl mx-auto w-fit">
-          {/* Browse button */}
+        {/* Browse / search bar — wraps on mobile */}
+        <div className="flex flex-wrap items-center gap-2 bg-black/70 backdrop-blur-xl p-2 rounded-2xl border border-white/10 shadow-2xl mx-auto w-full md:w-fit">
+          {/* Browse */}
           <button
             onClick={() => setShowBrowser(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white text-sm font-bold transition-colors border border-white/10"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white text-sm font-bold transition-colors border border-white/10"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
-            Browse
+            <span className="hidden sm:inline">Browse</span>
           </button>
 
-          <div className="w-px bg-white/20 h-6"></div>
-
-          {/* AI Vibe input */}
-          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all duration-300 ${
+          {/* AI search */}
+          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all duration-300 flex-1 min-w-0 ${
             selectedMood?.id === 'ai'
-              ? 'bg-purple-500/20 border-purple-500/60 shadow-[0_0_12px_rgba(168,85,247,0.3)]'
-              : isSearchMode && searchQuery === aiVibe.trim()
-              ? 'bg-blue-500/10 border-blue-500/40'
+              ? 'bg-purple-500/20 border-purple-500/60'
               : 'bg-white/5 border-white/10'
           }`}>
-            <span className="text-sm">✨</span>
+            <span className="text-sm shrink-0">✨</span>
             <input
               type="text"
-              placeholder="search or describe a vibe..."
+              placeholder="search or vibe..."
               value={aiVibe}
               onChange={e => setAiVibe(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleAiMood()}
-              className="bg-transparent text-white text-sm placeholder-white/30 outline-none w-36 focus:w-48 transition-all"
+              className="bg-transparent text-white text-sm placeholder-white/30 outline-none min-w-0 flex-1"
             />
             <button
               onClick={handleAiMood}
               disabled={aiLoading || !aiVibe.trim()}
-              className="text-purple-400 hover:text-purple-300 disabled:opacity-30 transition-colors"
+              className="text-purple-400 hover:text-purple-300 disabled:opacity-30 transition-colors shrink-0"
             >
               {aiLoading
-                ? <span className="w-3.5 h-3.5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin inline-block"></span>
+                ? <span className="w-3.5 h-3.5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin inline-block" />
                 : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
               }
             </button>
           </div>
 
-          <div className="w-px bg-white/20 h-6"></div>
-
-          {/* Active subreddit pill */}
-          <div className="flex items-center gap-2 px-3 py-2">
-            <span className="text-white font-bold text-sm">
-              {isSearchMode && searchQuery
-                ? `🔍 "${searchQuery}"`
-                : usingCustomSubreddit && customSubreddit
-                ? `r/${customSubreddit}`
-                : selectedSubreddit
-                ? `r/${selectedSubreddit}`
-                : 'All'}
-            </span>
-            {(usingCustomSubreddit ? customSubreddit : selectedSubreddit) && (
+          {/* Active sub + star */}
+          {(selectedSubreddit || usingCustomSubreddit) && (
+            <div className="flex items-center gap-1.5 px-2 py-1.5">
+              <span className="text-white font-bold text-xs truncate max-w-[80px] md:max-w-none">
+                {usingCustomSubreddit && customSubreddit ? `r/${customSubreddit}` : `r/${selectedSubreddit}`}
+              </span>
               <button
                 onClick={() => {
                   const sub = usingCustomSubreddit ? customSubreddit.trim() : selectedSubreddit;
@@ -432,63 +420,61 @@ export default function VideoGallery() {
                 }}
                 className={`text-sm transition-colors ${
                   isFavoriteSubreddit(usingCustomSubreddit ? customSubreddit.trim() : selectedSubreddit)
-                    ? 'text-yellow-400'
-                    : 'text-white/30 hover:text-yellow-400'
+                    ? 'text-yellow-400' : 'text-white/30 hover:text-yellow-400'
                 }`}
               >
                 {isFavoriteSubreddit(usingCustomSubreddit ? customSubreddit.trim() : selectedSubreddit) ? '⭐' : '☆'}
               </button>
-            )}
+            </div>
+          )}
+
+          {/* Custom r/ input */}
+          <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-xl px-2">
+            <input
+              type="text"
+              placeholder="r/..."
+              value={customSubreddit}
+              onChange={(e) => setCustomSubreddit(e.target.value)}
+              className="bg-transparent text-white py-2 outline-none w-16 md:w-24 text-sm placeholder-white/30"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && customSubreddit.trim()) {
+                  setUsingCustomSubreddit(true);
+                  setSelectedMood(null);
+                  fetchVideos(true);
+                }
+              }}
+            />
+            <button
+              onClick={() => {
+                if (customSubreddit.trim()) {
+                  setUsingCustomSubreddit(true);
+                  setSelectedMood(null);
+                  fetchVideos(true);
+                }
+              }}
+              className="bg-neon-pink/80 hover:bg-neon-pink px-2.5 py-1 rounded-lg text-xs font-bold transition-colors text-white"
+            >
+              GO
+            </button>
           </div>
 
-          <div className="w-px bg-white/20 h-6"></div>
-
-          {/* Custom input */}
-          <input
-            type="text"
-            placeholder="Custom r/..."
-            value={customSubreddit}
-            onChange={(e) => setCustomSubreddit(e.target.value)}
-            className="bg-transparent text-white px-3 py-2 outline-none w-28 focus:w-40 transition-all text-sm placeholder-white/30"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && customSubreddit.trim()) {
-                setUsingCustomSubreddit(true);
-                setSelectedMood(null);
-                fetchVideos(true);
-              }
-            }}
-          />
-          <button
-            onClick={() => {
-              if (customSubreddit.trim()) {
-                setUsingCustomSubreddit(true);
-                setSelectedMood(null);
-                fetchVideos(true);
-              }
-            }}
-            className="bg-neon-pink/80 hover:bg-neon-pink px-4 py-2 rounded-xl text-sm font-bold transition-colors cursor-pointer text-white"
-          >
-            GO
-          </button>
-
-          <div className="w-px bg-white/20 h-6"></div>
-
-          {/* Discord mode toggle */}
+          {/* Discord <10MB toggle */}
           <button
             onClick={() => setDiscordMode(d => !d)}
-            title="Show only videos under 10MB (Discord safe)"
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all duration-200 border ${
+            title="Under 10MB only"
+            className={`flex items-center gap-1 px-2.5 py-2 rounded-xl text-xs font-bold transition-all border ${
               discordMode
-                ? 'bg-indigo-500/20 border-indigo-500/60 text-indigo-300 shadow-[0_0_10px_rgba(99,102,241,0.3)]'
+                ? 'bg-indigo-500/20 border-indigo-500/60 text-indigo-300'
                 : 'bg-white/5 border-white/10 text-white/40 hover:text-white'
             }`}
           >
-            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057c.002.022.015.043.033.055a19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
-            &lt;10MB
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057c.002.022.015.043.033.055a19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/>
+            </svg>
+            <span className="hidden sm:inline">&lt;10MB</span>
           </button>
         </div>
       </div>
-
       {showBrowser && (
         <SubredditBrowser
           onSelect={(sub) => {

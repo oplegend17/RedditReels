@@ -126,29 +126,23 @@ export default function ImageGallery() {
 
   return (
     <>
-      <div className="flex flex-col gap-6 mb-12 sticky top-24 z-30 pointer-events-none">
-        <div className="pointer-events-auto flex items-center gap-2 bg-black/60 backdrop-blur-xl p-2 rounded-2xl border border-white/10 shadow-2xl mx-auto w-fit">
+      <div className="flex flex-col gap-3 mb-8 sticky top-16 md:top-20 z-30">
+        <div className="flex flex-wrap items-center gap-2 bg-black/60 backdrop-blur-xl p-2 rounded-2xl border border-white/10 shadow-2xl mx-auto w-full md:w-fit">
           <button
             onClick={() => setShowBrowser(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white text-sm font-bold transition-colors border border-white/10"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white text-sm font-bold transition-colors border border-white/10"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
-            Browse
+            <span className="hidden sm:inline">Browse</span>
           </button>
 
-          <div className="w-px bg-white/20 h-6"></div>
-
-          <div className="flex items-center gap-2 px-3 py-2">
-            <span className="text-white font-bold text-sm">
-              {usingCustomSubreddit && customSubreddit
-                ? `r/${customSubreddit}`
-                : selectedSubreddit
-                ? `r/${selectedSubreddit}`
-                : 'All'}
-            </span>
-            {(usingCustomSubreddit ? customSubreddit : selectedSubreddit) && (
+          {(selectedSubreddit || usingCustomSubreddit) && (
+            <div className="flex items-center gap-1.5 px-2 py-1.5">
+              <span className="text-white font-bold text-xs truncate max-w-[80px] md:max-w-none">
+                {usingCustomSubreddit && customSubreddit ? `r/${customSubreddit}` : `r/${selectedSubreddit}`}
+              </span>
               <button
                 onClick={() => {
                   const sub = usingCustomSubreddit ? customSubreddit.trim() : selectedSubreddit;
@@ -156,41 +150,40 @@ export default function ImageGallery() {
                 }}
                 className={`text-sm transition-colors ${
                   isFavoriteSubreddit(usingCustomSubreddit ? customSubreddit.trim() : selectedSubreddit)
-                    ? 'text-yellow-400'
-                    : 'text-white/30 hover:text-yellow-400'
+                    ? 'text-yellow-400' : 'text-white/30 hover:text-yellow-400'
                 }`}
               >
                 {isFavoriteSubreddit(usingCustomSubreddit ? customSubreddit.trim() : selectedSubreddit) ? '⭐' : '☆'}
               </button>
-            )}
+            </div>
+          )}
+
+          <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-xl px-2 flex-1 min-w-0">
+            <input
+              type="text"
+              placeholder="r/..."
+              value={customSubreddit}
+              onChange={(e) => setCustomSubreddit(e.target.value)}
+              className="bg-transparent text-white py-2 outline-none w-full min-w-0 text-sm placeholder-white/30"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && customSubreddit.trim()) {
+                  setUsingCustomSubreddit(true);
+                  fetchImages(true);
+                }
+              }}
+            />
+            <button
+              onClick={() => {
+                if (customSubreddit.trim()) {
+                  setUsingCustomSubreddit(true);
+                  fetchImages(true);
+                }
+              }}
+              className="bg-neon-pink/80 hover:bg-neon-pink px-2.5 py-1 rounded-lg text-xs font-bold transition-colors text-white shrink-0"
+            >
+              GO
+            </button>
           </div>
-
-          <div className="w-px bg-white/20 h-6"></div>
-
-          <input
-            type="text"
-            placeholder="Custom r/..."
-            value={customSubreddit}
-            onChange={(e) => setCustomSubreddit(e.target.value)}
-            className="bg-transparent text-white px-3 py-2 outline-none w-28 focus:w-40 transition-all text-sm placeholder-white/30"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && customSubreddit.trim()) {
-                setUsingCustomSubreddit(true);
-                fetchImages(true);
-              }
-            }}
-          />
-          <button
-            onClick={() => {
-              if (customSubreddit.trim()) {
-                setUsingCustomSubreddit(true);
-                fetchImages(true);
-              }
-            }}
-            className="bg-neon-pink/80 hover:bg-neon-pink px-4 py-2 rounded-xl text-sm font-bold transition-colors cursor-pointer text-white"
-          >
-            GO
-          </button>
         </div>
       </div>
 
