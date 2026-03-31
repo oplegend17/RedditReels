@@ -230,13 +230,25 @@ app.get("/api/reddit/:subreddit", async (req, res) => {
       after ? `&after=${after}` : ""
     }`;
     console.log(`🔎 Fetching subreddit with OAuth: ${url}`);
-    const response = await fetch(url, {
-      headers: buildHeaders(token),
-    });
+    const response = await fetch(url, { headers: buildHeaders(token) });
+
     if (!response.ok) {
-      throw new Error(`Reddit API returned ${response.status} ${response.statusText}`);
+      const status = response.status;
+      const message =
+        status === 404 ? "Subreddit not found" :
+        status === 403 ? "Subreddit is private or banned" :
+        status === 451 ? "Subreddit is quarantined" :
+        `Reddit error ${status}`;
+      console.warn(`⚠️ r/${subreddit}: ${message}`);
+      return res.status(status).json({ error: message, status });
     }
+
     const data = await response.json();
+    if (data?.error) {
+      console.warn(`⚠️ r/${subreddit}: Reddit returned error ${data.error}`);
+      return res.status(data.error).json({ error: "Subreddit unavailable", status: data.error });
+    }
+
     res.json(data);
   } catch (err) {
     console.error(`❌ Error fetching subreddit: ${req.params.subreddit}`);

@@ -88,7 +88,14 @@ export default function VideoGallery() {
         url = `${BACKEND_API_URL}/api/reddit/${sub}${after ? `?after=${after}` : ''}`;
       }
       const response = await fetch(url);
-      if (!response.ok) throw new Error('Failed to fetch');
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        const msg = errData.error || 'This subreddit is unavailable';
+        setError(msg);
+        setVideos([]);
+        setIsLoading(false);
+        return;
+      }
       const data = await response.json();
       
       const vids = (data?.data?.children || [])
@@ -457,6 +464,22 @@ export default function VideoGallery() {
           onGlobalSearch={handleGlobalSearch}
           onClose={() => setShowBrowser(false)}
         />
+      )}
+
+      {error && (
+        <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+          <div className="text-5xl">🚫</div>
+          <p className="text-white/60 text-lg font-medium">{error}</p>
+          <p className="text-white/30 text-sm">Try a different subreddit or search term</p>
+        </div>
+      )}
+
+      {!error && !isLoading && videos.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
+          <div className="text-5xl">🌑</div>
+          <p className="text-white/60 text-lg font-medium">No videos found</p>
+          <p className="text-white/30 text-sm">This subreddit might not have video content</p>
+        </div>
       )}
 
       <Masonry breakpointCols={breakpointColumns} className="flex w-auto -ml-6" columnClassName="pl-6 bg-clip-padding">
