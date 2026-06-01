@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import Masonry from 'react-masonry-css';
 import { LazyImage } from '../components/LazyMedia';
 import { useFavoriteSubreddits } from '../lib/useFavoriteSubreddits';
@@ -7,6 +8,10 @@ import SubredditBrowser from '../components/SubredditBrowser';
 const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL;
 
 export default function ImageGallery() {
+  const { profile } = useOutletContext() || {};
+  const restrictionActive = profile?.restrictionType === 'keyword' && profile?.restrictionKeyword;
+  const restrictionKeyword = profile?.restrictionKeyword || '';
+
   const [images, setImages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -40,22 +45,29 @@ export default function ImageGallery() {
   const fetchImages = async (isNewSubreddit = false) => {
     const isCustom = usingCustomSubreddit;
     const sub = isCustom ? customSubreddit.trim() : selectedSubreddit;
-    const after = isCustom ? (isNewSubreddit ? '' : customAfterId) : (isNewSubreddit ? '' : afterId);
-    const hasMoreCheck = isCustom ? (isNewSubreddit || customHasMore) : (isNewSubreddit || hasMore);
+    const after = restrictionActive ? (isNewSubreddit ? '' : afterId) : (isCustom ? (isNewSubreddit ? '' : customAfterId) : (isNewSubreddit ? '' : afterId));
+    const hasMoreCheck = restrictionActive ? (isNewSubreddit || hasMore) : (isCustom ? (isNewSubreddit || customHasMore) : (isNewSubreddit || hasMore));
 
-    if (!sub || !hasMoreCheck) return;
+    if (!restrictionActive && (!sub || !hasMoreCheck)) return;
 
     try {
       setIsLoading(true);
       setError(null);
-      const url = `${BACKEND_API_URL}/api/reddit/${sub}${after ? `?after=${after}` : ''}`;
+      
+      let url;
+      if (restrictionActive) {
+        url = `${BACKEND_API_URL}/api/search?q=${encodeURIComponent(restrictionKeyword)}${after ? `&after=${after}` : ''}`;
+      } else {
+        url = `${BACKEND_API_URL}/api/reddit/${sub}${after ? `?after=${after}` : ''}`;
+      }
+      
       const response = await fetch(url);
       if (!response.ok) throw new Error('Failed to fetch');
       const data = await response.json();
       
-      const imgs = (data?.data?.children || [])
+      let imgs = (data?.data?.children || [])
         .map(post => post?.data)
-        .filter(p => p?.post_hint === 'image' && p?.url && /\.(jpg|jpeg|png|gif)$/i.test(p.url))
+        .filter(p => p && (p.post_hint === 'image' || (p.url && /\.(jpg|jpeg|png|gif)$/i.test(p.url))))
         .map(p => ({
           id: p.id,
           title: p.title,
@@ -64,9 +76,23 @@ export default function ImageGallery() {
           subreddit: p.subreddit
         }));
 
+      // Strict keyword filter
+      if (restrictionActive) {
+        const kw = restrictionKeyword.toLowerCase().trim();
+        imgs = imgs.filter(img => {
+          const title = (img.title || '').toLowerCase();
+          const sub = (img.subreddit || '').toLowerCase();
+          const url = (img.url || '').toLowerCase();
+          return title.includes(kw) || sub.includes(kw) || url.includes(kw);
+        });
+      }
+
       const newAfter = data?.data?.after;
       
-      if (isCustom) {
+      if (restrictionActive) {
+        setAfterId(newAfter);
+        setHasMore(!!newAfter && imgs.length > 0);
+      } else if (isCustom) {
         setCustomAfterId(newAfter);
         setCustomHasMore(!!newAfter && imgs.length > 0);
       } else {
@@ -83,12 +109,14 @@ export default function ImageGallery() {
   };
 
   useEffect(() => {
-    if (usingCustomSubreddit) {
+    if (restrictionActive) {
+      fetchImages(true);
+    } else if (usingCustomSubreddit) {
       if (customSubreddit) fetchImages(true);
     } else if (selectedSubreddit) {
       fetchImages(true);
     }
-  }, [selectedSubreddit, usingCustomSubreddit]);
+  }, [selectedSubreddit, usingCustomSubreddit, restrictionActive]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -102,7 +130,7 @@ export default function ImageGallery() {
     
     if (loadingRef.current) observer.observe(loadingRef.current);
     return () => observer.disconnect();
-  }, [isLoading, hasMore, customHasMore]);
+  }, [isLoading, hasMore, customHasMore, restrictionActive]);
 
   const handleDownload = async (e, item) => {
     e.stopPropagation();
@@ -126,66 +154,81 @@ export default function ImageGallery() {
 
   return (
     <>
-      <div className="flex flex-col gap-3 mb-8 sticky top-16 md:top-20 z-30">
-        <div className="flex flex-wrap items-center gap-2 bg-black/60 backdrop-blur-xl p-2 rounded-2xl border border-white/10 shadow-2xl mx-auto w-full md:w-fit">
-          <button
-            onClick={() => setShowBrowser(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white text-sm font-bold transition-colors border border-white/10"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-            <span className="hidden sm:inline">Browse</span>
-          </button>
+      {restrictionActive && (
+        <div className="w-full p-4 md:p-5 bg-purple-500/10 border border-purple-500/25 rounded-2xl flex items-center justify-between mb-6 animate-pulse">
+          <div className="flex items-center gap-3">
+            <span className="text-xl">🔒</span>
+            <div>
+              <p className="text-xs font-black uppercase text-purple-400 tracking-wider">Restricted Feed Guard Active</p>
+              <p className="text-sm font-semibold text-white/80">Showing exclusive results matching <span className="font-mono text-purple-300">"{restrictionKeyword}"</span></p>
+            </div>
+          </div>
+          <span className="text-xs text-purple-400/50 font-mono hidden sm:inline">Feed Filtered & Secure</span>
+        </div>
+      )}
 
-          {(selectedSubreddit || usingCustomSubreddit) && (
-            <div className="flex items-center gap-1.5 px-2 py-1.5">
-              <span className="text-white font-bold text-xs truncate max-w-[80px] md:max-w-none">
-                {usingCustomSubreddit && customSubreddit ? `r/${customSubreddit}` : `r/${selectedSubreddit}`}
-              </span>
+      {!restrictionActive && (
+        <div className="flex flex-col gap-3 mb-8 sticky top-16 md:top-20 z-30">
+          <div className="flex flex-wrap items-center gap-2 bg-black/60 backdrop-blur-xl p-2 rounded-2xl border border-white/10 shadow-2xl mx-auto w-full md:w-fit">
+            <button
+              onClick={() => setShowBrowser(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white text-sm font-bold transition-colors border border-white/10"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+              <span className="hidden sm:inline">Browse</span>
+            </button>
+
+            {(selectedSubreddit || usingCustomSubreddit) && (
+              <div className="flex items-center gap-1.5 px-2 py-1.5">
+                <span className="text-white font-bold text-xs truncate max-w-[80px] md:max-w-none">
+                  {usingCustomSubreddit && customSubreddit ? `r/${customSubreddit}` : `r/${selectedSubreddit}`}
+                </span>
+                <button
+                  onClick={() => {
+                    const sub = usingCustomSubreddit ? customSubreddit.trim() : selectedSubreddit;
+                    isFavoriteSubreddit(sub) ? removeFavoriteSubreddit(sub) : addFavoriteSubreddit(sub);
+                  }}
+                  className={`text-sm transition-colors ${
+                    isFavoriteSubreddit(usingCustomSubreddit ? customSubreddit.trim() : selectedSubreddit)
+                      ? 'text-yellow-400' : 'text-white/30 hover:text-yellow-400'
+                  }`}
+                >
+                  {isFavoriteSubreddit(usingCustomSubreddit ? customSubreddit.trim() : selectedSubreddit) ? '⭐' : '☆'}
+                </button>
+              </div>
+            )}
+
+            <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-xl px-2 flex-1 min-w-0">
+              <input
+                type="text"
+                placeholder="r/..."
+                value={customSubreddit}
+                onChange={(e) => setCustomSubreddit(e.target.value)}
+                className="bg-transparent text-white py-2 outline-none w-full min-w-0 text-sm placeholder-white/30"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && customSubreddit.trim()) {
+                    setUsingCustomSubreddit(true);
+                    fetchImages(true);
+                  }
+                }}
+              />
               <button
                 onClick={() => {
-                  const sub = usingCustomSubreddit ? customSubreddit.trim() : selectedSubreddit;
-                  isFavoriteSubreddit(sub) ? removeFavoriteSubreddit(sub) : addFavoriteSubreddit(sub);
+                  if (customSubreddit.trim()) {
+                    setUsingCustomSubreddit(true);
+                    fetchImages(true);
+                  }
                 }}
-                className={`text-sm transition-colors ${
-                  isFavoriteSubreddit(usingCustomSubreddit ? customSubreddit.trim() : selectedSubreddit)
-                    ? 'text-yellow-400' : 'text-white/30 hover:text-yellow-400'
-                }`}
+                className="bg-neon-pink/80 hover:bg-neon-pink px-2.5 py-1 rounded-lg text-xs font-bold transition-colors text-white shrink-0"
               >
-                {isFavoriteSubreddit(usingCustomSubreddit ? customSubreddit.trim() : selectedSubreddit) ? '⭐' : '☆'}
+                GO
               </button>
             </div>
-          )}
-
-          <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-xl px-2 flex-1 min-w-0">
-            <input
-              type="text"
-              placeholder="r/..."
-              value={customSubreddit}
-              onChange={(e) => setCustomSubreddit(e.target.value)}
-              className="bg-transparent text-white py-2 outline-none w-full min-w-0 text-sm placeholder-white/30"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && customSubreddit.trim()) {
-                  setUsingCustomSubreddit(true);
-                  fetchImages(true);
-                }
-              }}
-            />
-            <button
-              onClick={() => {
-                if (customSubreddit.trim()) {
-                  setUsingCustomSubreddit(true);
-                  fetchImages(true);
-                }
-              }}
-              className="bg-neon-pink/80 hover:bg-neon-pink px-2.5 py-1 rounded-lg text-xs font-bold transition-colors text-white shrink-0"
-            >
-              GO
-            </button>
           </div>
         </div>
-      </div>
+      )}
 
       {showBrowser && (
         <SubredditBrowser

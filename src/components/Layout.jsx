@@ -81,7 +81,7 @@ const navItems = [
 // Bottom tab bar shows these 5 on mobile
 const mobileTabItems = ['/', '/reels', '/females', '/favorites', '/profile'];
 
-export default function Layout() {
+export default function Layout({ profile, isAdmin }) {
   const [showNav, setShowNav] = useState(true);
   const [moreOpen, setMoreOpen] = useState(false);
   const lastScrollY = useRef(0);
@@ -106,8 +106,25 @@ export default function Layout() {
     return location.pathname.startsWith(path);
   };
 
-  const tabItems = navItems.filter(n => mobileTabItems.includes(n.path));
-  const moreItems = navItems.filter(n => !mobileTabItems.includes(n.path));
+  // Dynamically include Admin route in current navigation if role is admin
+  const currentNavItems = isAdmin
+    ? [
+        ...navItems.slice(0, 7), // Up to Favorites
+        {
+          path: '/admin',
+          label: 'Admin',
+          icon: (
+            <svg className="w-5 h-5 text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.5)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+          ),
+        },
+        ...navItems.slice(7), // Profile
+      ]
+    : navItems;
+
+  const tabItems = currentNavItems.filter(n => mobileTabItems.includes(n.path));
+  const moreItems = currentNavItems.filter(n => !mobileTabItems.includes(n.path));
 
   return (
     <div className="min-h-screen text-white">
@@ -128,7 +145,7 @@ export default function Layout() {
 
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-1 bg-black/20 p-1.5 rounded-full border border-white/5 backdrop-blur-md overflow-x-auto no-scrollbar">
-            {navItems.map(item => (
+            {currentNavItems.map(item => (
               <Link
                 key={item.path}
                 to={item.path}
@@ -154,14 +171,14 @@ export default function Layout() {
 
           {/* Mobile: current page label */}
           <span className="md:hidden text-sm font-bold text-white/60 capitalize">
-            {navItems.find(n => isActive(n.path))?.label || ''}
+            {currentNavItems.find(n => isActive(n.path))?.label || ''}
           </span>
         </div>
       </header>
 
       {/* ── Main content ── */}
       <main className="max-w-[1800px] mx-auto px-3 md:px-8 pt-16 md:pt-20 pb-20 md:pb-8">
-        <Outlet />
+        <Outlet context={{ profile, isAdmin }} />
       </main>
 
       {/* ── Mobile bottom tab bar ── */}

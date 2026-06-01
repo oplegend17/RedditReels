@@ -10,7 +10,7 @@ import {
   Timestamp 
 } from 'firebase/firestore';
 
-const COLLECTION_NAME = 'challenge_results';
+const COLLECTION_NAME = 'leaderboard';
 
 export const addToLeaderboard = async (entry) => {
   try {
@@ -34,41 +34,40 @@ export const getLeaderboardData = async (timeFilter = 'all', challengeFilter = '
       constraints.push(where('challengeType', '==', challengeFilter));
     }
 
-    // Filter by time
-    const now = new Date();
-    if (timeFilter === 'week') {
-      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      constraints.push(where('timestamp', '>=', Timestamp.fromDate(weekAgo)));
-    } else if (timeFilter === 'month') {
-      const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      constraints.push(where('timestamp', '>=', Timestamp.fromDate(monthAgo)));
-    }
-
-    // Sort by duration (descending) and limit
-    // Note: Firestore requires an index for compound queries with range filter and sort on different fields.
-    // For now, we'll sort by duration. If time filter is applied, we might need client-side sorting 
-    // or a composite index. Let's try to do as much as possible in query.
-    
-    // If we have a time filter, we are filtering on 'timestamp'. 
-    // If we sort by 'duration', we need an index.
-    // To avoid index creation requirement errors for now, we can fetch more and sort client side if needed,
-    // OR just assume the user will create the index when prompted by console error.
-    // Let's add the sort.
-    constraints.push(orderBy('duration', 'desc'));
-    constraints.push(limit(50)); // Fetch top 50 to allow for some client-side filtering if needed
+    // Fetch the raw documents (limited to 200 for safe client-side sorting and filtering)
+    constraints.push(limit(200));
 
     q = query(q, ...constraints);
 
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => {
+    
+    let results = querySnapshot.docs.map(doc => {
       const data = doc.data();
       return {
+        id: doc.id,
         ...data,
-        timestamp: data.timestamp?.toDate ? data.timestamp.toDate().getTime() : new Date(data.date).getTime()
+        timestamp: data.timestamp?.toDate ? data.timestamp.toDate().getTime() : (data.date ? new Date(data.date).getTime() : Date.now())
       };
     });
+
+    // Filter by time client-side to prevent Firestore composite index crashes
+    const now = Date.now();
+    if (timeFilter === 'week') {
+      const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
+      results = results.filter(r => r.timestamp >= weekAgo);
+    } else if (timeFilter === 'month') {
+      const monthAgo = now - 30 * 24 * 60 * 60 * 1000;
+      results = results.filter(r => r.timestamp >= monthAgo);
+    }
+
+    // Sort by duration descending client-side
+    results.sort((a, b) => (b.duration || 0) - (a.duration || 0));
+
+    // Return the top 50
+    return results.slice(0, 50);
+
   } catch (error) {
-    console.error("Error getting documents: ", error);
+    console.error("Error getting documents from leaderboard: ", error);
     return [];
   }
 };

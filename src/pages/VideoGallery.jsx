@@ -1,15 +1,23 @@
 import { useState, useEffect, useRef } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import Masonry from 'react-masonry-css';
 import { LazyVideo } from '../components/LazyMedia';
 import VideoModal from '../components/VideoModal';
+import DownloadAllModal from '../components/DownloadAllModal';
 import { useFavorites } from '../lib/useFavorites';
+import { useDownloads } from '../lib/useDownloads';
 import { useFavoriteSubreddits } from '../lib/useFavoriteSubreddits';
 import { MOODS } from '../lib/subreddits';
 import SubredditBrowser from '../components/SubredditBrowser';
+import { useHistory } from '../lib/useHistory';
 
 const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL;
 
 export default function VideoGallery() {
+  const { profile } = useOutletContext() || {};
+  const restrictionActive = profile?.restrictionType === 'keyword' && profile?.restrictionKeyword;
+  const restrictionKeyword = profile?.restrictionKeyword || '';
+
   const [videos, setVideos] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -21,6 +29,8 @@ export default function VideoGallery() {
   const [playingVideoId, setPlayingVideoId] = useState(null);
   const [selectedVideo, setSelectedVideo] = useState(null);
   const { isFavorite, addFavorite, removeFavorite } = useFavorites();
+  const { addDownload } = useDownloads();
+  const { markAsSeen } = useHistory();
   const { favoriteSubreddits, addFavoriteSubreddit, removeFavoriteSubreddit, isFavoriteSubreddit } = useFavoriteSubreddits();
   const [showBrowser, setShowBrowser] = useState(false);
   const [discordMode, setDiscordMode] = useState(false);
@@ -36,6 +46,7 @@ export default function VideoGallery() {
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [searchAfterId, setSearchAfterId] = useState(null);
   const [searchHasMore, setSearchHasMore] = useState(true);
+  const [showDownloadAll, setShowDownloadAll] = useState(false);
 
   useEffect(() => {
     const fetchSubreddits = async () => {
@@ -62,7 +73,7 @@ export default function VideoGallery() {
   const fetchVideos = async (isNewSubreddit = false) => {
     const isCustom = usingCustomSubreddit;
     const isMood = !!selectedMood;
-    const isSearch = isSearchMode;
+    const isSearch = isSearchMode || restrictionActive;
     
     let sub = selectedSubreddit;
     if (isCustom) sub = customSubreddit.trim();
@@ -77,7 +88,7 @@ export default function VideoGallery() {
                        (isNewSubreddit || hasMore);
 
     if (!isSearch && (!sub || !hasMoreCheck)) return;
-    if (isSearch && (!searchQuery || !hasMoreCheck)) return;
+    if (isSearch && !restrictionActive && (!searchQuery || !hasMoreCheck)) return;
 
     try {
       setIsLoading(true);
@@ -85,7 +96,11 @@ export default function VideoGallery() {
       
       let url;
       if (isSearch) {
-        url = `${BACKEND_API_URL}/api/search?q=${encodeURIComponent(searchQuery)}${after ? `&after=${after}` : ''}`;
+        // Enforce restriction keyword by appending it or using it as fallback
+        const effectiveQuery = restrictionActive
+          ? (searchQuery.trim() ? `${searchQuery.trim()} ${restrictionKeyword}` : restrictionKeyword)
+          : searchQuery;
+        url = `${BACKEND_API_URL}/api/search?q=${encodeURIComponent(effectiveQuery)}${after ? `&after=${after}` : ''}`;
       } else {
         url = `${BACKEND_API_URL}/api/reddit/${sub}${after ? `?after=${after}` : ''}`;
       }
@@ -100,7 +115,7 @@ export default function VideoGallery() {
       }
       const data = await response.json();
       
-      const vids = (data?.data?.children || [])
+      let vids = (data?.data?.children || [])
         .map(post => post?.data)
         .filter(p => {
           if (!p) return false;
@@ -124,6 +139,17 @@ export default function VideoGallery() {
         }))
         .filter(p => p.url || p.isRedgifs);
 
+      // Perform strict keyword filtering on client side if restriction active
+      if (restrictionActive) {
+        const kw = restrictionKeyword.toLowerCase().trim();
+        vids = vids.filter(v => {
+          const title = (v.title || '').toLowerCase();
+          const sub = (v.subreddit || '').toLowerCase();
+          const url = (v.url || v.originalUrl || '').toLowerCase();
+          return title.includes(kw) || sub.includes(kw) || url.includes(kw);
+        });
+      }
+
       const newAfter = data?.data?.after;
       
       if (isSearch) {
@@ -146,7 +172,9 @@ export default function VideoGallery() {
   };
 
   useEffect(() => {
-    if (isSearchMode) {
+    if (restrictionActive) {
+      fetchVideos(true);
+    } else if (isSearchMode) {
       if (searchQuery) fetchVideos(true);
     } else if (selectedMood) {
       fetchVideos(true);
@@ -155,7 +183,7 @@ export default function VideoGallery() {
     } else if (selectedSubreddit) {
       fetchVideos(true);
     }
-  }, [selectedSubreddit, usingCustomSubreddit, selectedMood, isSearchMode, searchQuery]);
+  }, [selectedSubreddit, usingCustomSubreddit, selectedMood, isSearchMode, searchQuery, restrictionActive]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -183,8 +211,19 @@ export default function VideoGallery() {
   const handleDownload = async (e, item) => {
     e.stopPropagation();
     try {
-      const response = await fetch(item.url);
+      const mergeUrl = `${BACKEND_API_URL}/api/merge-video?url=${encodeURIComponent(item.url)}`;
+      const response = await fetch(mergeUrl);
       const blob = await response.blob();
+      
+      // Track the download in user history
+      await addDownload({
+        id: item.id,
+        title: item.title,
+        url: item.url,
+        thumbnail: item.thumbnail,
+        subreddit: item.subreddit
+      });
+
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -305,6 +344,16 @@ export default function VideoGallery() {
     fetchVideos(true);
   };
 
+  const getActiveSubredditString = () => {
+    if (selectedMood) {
+      return selectedMood.subreddits.join('+');
+    }
+    if (usingCustomSubreddit && customSubreddit) {
+      return customSubreddit.trim();
+    }
+    return selectedSubreddit;
+  };
+
   const breakpointColumns = { default: 4, 1440: 3, 1100: 2, 700: 1 };
   const [showNav, setShowNav] = useState(true);
   const lastScrollY = useRef(0);
@@ -328,57 +377,74 @@ export default function VideoGallery() {
 
   return (
     <>
+      {restrictionActive && (
+        <div className="w-full p-4 md:p-5 bg-purple-500/10 border border-purple-500/25 rounded-2xl flex items-center justify-between mb-6 animate-pulse">
+          <div className="flex items-center gap-3">
+            <span className="text-xl">🔒</span>
+            <div>
+              <p className="text-xs font-black uppercase text-purple-400 tracking-wider">Restricted Feed Guard Active</p>
+              <p className="text-sm font-semibold text-white/80">Showing exclusive results matching <span className="font-mono text-purple-300">"{restrictionKeyword}"</span></p>
+            </div>
+          </div>
+          <span className="text-xs text-purple-400/50 font-mono hidden sm:inline">Feed Filtered & Secure</span>
+        </div>
+      )}
+
       <div 
         className={`flex flex-col gap-3 mb-8 sticky top-16 md:top-20 z-30 transition-transform duration-300 ${
           showNav ? 'translate-y-0' : '-translate-y-[200%]'
         }`}
       >
         {/* Mood pills — scrollable row */}
-        <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-          {MOODS.map(mood => (
+        {!restrictionActive && (
+          <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+            {MOODS.map(mood => (
+              <button
+                key={mood.id}
+                onClick={() => handleMoodSelect(mood)}
+                className={`flex items-center gap-1.5 px-3 md:px-5 py-2 rounded-full text-xs md:text-sm font-bold whitespace-nowrap transition-all duration-300 border ${
+                  selectedMood?.id === mood.id
+                    ? 'bg-neon-pink text-white border-neon-pink shadow-[0_0_15px_rgba(255,47,86,0.4)] scale-105'
+                    : 'bg-black/60 text-neutral-400 border-white/10 hover:bg-white/10 hover:text-white backdrop-blur-xl'
+                }`}
+              >
+                <span>{mood.icon}</span>
+                <span className="hidden sm:inline">{mood.label.replace(/^.+? /, '')}</span>
+              </button>
+            ))}
             <button
-              key={mood.id}
-              onClick={() => handleMoodSelect(mood)}
-              className={`flex items-center gap-1.5 px-3 md:px-5 py-2 rounded-full text-xs md:text-sm font-bold whitespace-nowrap transition-all duration-300 border ${
-                selectedMood?.id === mood.id
-                  ? 'bg-neon-pink text-white border-neon-pink shadow-[0_0_15px_rgba(255,47,86,0.4)] scale-105'
+              onClick={() => { 
+                setSelectedMood(null); 
+                setUsingCustomSubreddit(false); 
+                setIsSearchMode(false);
+                setSearchQuery('');
+                setVideos([]); 
+              }}
+              className={`px-3 md:px-5 py-2 rounded-full text-xs md:text-sm font-bold whitespace-nowrap transition-all duration-300 border ${
+                !selectedMood && !usingCustomSubreddit && !isSearchMode
+                  ? 'bg-white text-black border-white'
                   : 'bg-black/60 text-neutral-400 border-white/10 hover:bg-white/10 hover:text-white backdrop-blur-xl'
               }`}
             >
-              <span>{mood.icon}</span>
-              <span className="hidden sm:inline">{mood.label.replace(/^.+? /, '')}</span>
+              All
             </button>
-          ))}
-          <button
-            onClick={() => { 
-              setSelectedMood(null); 
-              setUsingCustomSubreddit(false); 
-              setIsSearchMode(false);
-              setSearchQuery('');
-              setVideos([]); 
-            }}
-            className={`px-3 md:px-5 py-2 rounded-full text-xs md:text-sm font-bold whitespace-nowrap transition-all duration-300 border ${
-              !selectedMood && !usingCustomSubreddit && !isSearchMode
-                ? 'bg-white text-black border-white'
-                : 'bg-black/60 text-neutral-400 border-white/10 hover:bg-white/10 hover:text-white backdrop-blur-xl'
-            }`}
-          >
-            All
-          </button>
-        </div>
+          </div>
+        )}
 
         {/* Browse / search bar — wraps on mobile */}
         <div className="flex flex-wrap items-center gap-2 bg-black/70 backdrop-blur-xl p-2 rounded-2xl border border-white/10 shadow-2xl mx-auto w-full md:w-fit">
           {/* Browse */}
-          <button
-            onClick={() => setShowBrowser(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white text-sm font-bold transition-colors border border-white/10"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-            <span className="hidden sm:inline">Browse</span>
-          </button>
+          {!restrictionActive && (
+            <button
+              onClick={() => setShowBrowser(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white text-sm font-bold transition-colors border border-white/10"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+              <span className="hidden sm:inline">Browse</span>
+            </button>
+          )}
 
           {/* AI search */}
           <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all duration-300 flex-1 min-w-0 ${
@@ -389,14 +455,30 @@ export default function VideoGallery() {
             <span className="text-sm shrink-0">✨</span>
             <input
               type="text"
-              placeholder="search or vibe..."
+              placeholder={restrictionActive ? "search restricted feed..." : "search or vibe..."}
               value={aiVibe}
               onChange={e => setAiVibe(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleAiMood()}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  if (restrictionActive) {
+                    setSearchQuery(aiVibe);
+                    fetchVideos(true);
+                  } else {
+                    handleAiMood();
+                  }
+                }
+              }}
               className="bg-transparent text-white text-sm placeholder-white/30 outline-none min-w-0 flex-1"
             />
             <button
-              onClick={handleAiMood}
+              onClick={() => {
+                if (restrictionActive) {
+                  setSearchQuery(aiVibe);
+                  fetchVideos(true);
+                } else {
+                  handleAiMood();
+                }
+              }}
               disabled={aiLoading || !aiVibe.trim()}
               className="text-purple-400 hover:text-purple-300 disabled:opacity-30 transition-colors shrink-0"
             >
@@ -408,7 +490,7 @@ export default function VideoGallery() {
           </div>
 
           {/* Active sub + star */}
-          {(selectedSubreddit || usingCustomSubreddit) && (
+          {!restrictionActive && (selectedSubreddit || usingCustomSubreddit) && (
             <div className="flex items-center gap-1.5 px-2 py-1.5">
               <span className="text-white font-bold text-xs truncate max-w-[80px] md:max-w-none">
                 {usingCustomSubreddit && customSubreddit ? `r/${customSubreddit}` : `r/${selectedSubreddit}`}
@@ -429,34 +511,36 @@ export default function VideoGallery() {
           )}
 
           {/* Custom r/ input */}
-          <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-xl px-2">
-            <input
-              type="text"
-              placeholder="r/..."
-              value={customSubreddit}
-              onChange={(e) => setCustomSubreddit(e.target.value)}
-              className="bg-transparent text-white py-2 outline-none w-16 md:w-24 text-sm placeholder-white/30"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && customSubreddit.trim()) {
-                  setUsingCustomSubreddit(true);
-                  setSelectedMood(null);
-                  fetchVideos(true);
-                }
-              }}
-            />
-            <button
-              onClick={() => {
-                if (customSubreddit.trim()) {
-                  setUsingCustomSubreddit(true);
-                  setSelectedMood(null);
-                  fetchVideos(true);
-                }
-              }}
-              className="bg-neon-pink/80 hover:bg-neon-pink px-2.5 py-1 rounded-lg text-xs font-bold transition-colors text-white"
-            >
-              GO
-            </button>
-          </div>
+          {!restrictionActive && (
+            <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-xl px-2">
+              <input
+                type="text"
+                placeholder="r/..."
+                value={customSubreddit}
+                onChange={(e) => setCustomSubreddit(e.target.value)}
+                className="bg-transparent text-white py-2 outline-none w-16 md:w-24 text-sm placeholder-white/30"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && customSubreddit.trim()) {
+                    setUsingCustomSubreddit(true);
+                    setSelectedMood(null);
+                    fetchVideos(true);
+                  }
+                }}
+              />
+              <button
+                onClick={() => {
+                  if (customSubreddit.trim()) {
+                    setUsingCustomSubreddit(true);
+                    setSelectedMood(null);
+                    fetchVideos(true);
+                  }
+                }}
+                className="bg-neon-pink/80 hover:bg-neon-pink px-2.5 py-1 rounded-lg text-xs font-bold transition-colors text-white"
+              >
+                GO
+              </button>
+            </div>
+          )}
 
           {/* Discord <10MB toggle */}
           <button
@@ -473,6 +557,22 @@ export default function VideoGallery() {
             </svg>
             <span className="hidden sm:inline">&lt;10MB</span>
           </button>
+
+          {/* Download All button */}
+          {!restrictionActive && getActiveSubredditString() && (
+            <button
+              onClick={() => setShowDownloadAll(true)}
+              title="Download all videos from this subreddit"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-neon-pink/15 hover:bg-neon-pink/25 border border-neon-pink/30 hover:border-neon-pink/50 text-neon-pink hover:text-red-300 text-xs font-bold transition-all cursor-pointer"
+            >
+              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              <span className="hidden sm:inline">Download All</span>
+            </button>
+          )}
         </div>
       </div>
       {showBrowser && (
@@ -524,7 +624,10 @@ export default function VideoGallery() {
                 className="group relative mb-6 bg-dark-card rounded-2xl overflow-hidden border border-white/5 shadow-lg transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_10px_40px_rgba(0,0,0,0.5)] hover:border-white/20 cursor-pointer"
                 onMouseEnter={() => setPlayingVideoId(vid.id)}
                 onMouseLeave={() => setPlayingVideoId(null)}
-                onClick={() => setSelectedVideo(vid)}
+                onClick={() => {
+                  setSelectedVideo(vid);
+                  markAsSeen(vid);
+                }}
               >
                 <div className="relative aspect-[9/16] bg-black">
                   <LazyVideo
@@ -564,6 +667,7 @@ export default function VideoGallery() {
       </div>
 
       {selectedVideo && <VideoModal video={selectedVideo} isRedgifs={selectedVideo.isRedgifs} originalUrl={selectedVideo.originalUrl} onClose={() => setSelectedVideo(null)} />}
+      {showDownloadAll && <DownloadAllModal subreddit={getActiveSubredditString()} onClose={() => setShowDownloadAll(false)} />}
     </>
   );
 }

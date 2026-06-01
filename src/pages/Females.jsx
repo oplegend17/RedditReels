@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import Masonry from 'react-masonry-css';
 import { useFavorites } from '../lib/useFavorites';
 
@@ -90,6 +91,10 @@ const MOODS = [
 ];
 
 export default function Females() {
+  const { profile } = useOutletContext() || {};
+  const restrictionActive = profile?.restrictionType === 'keyword' && profile?.restrictionKeyword;
+  const restrictionKeyword = profile?.restrictionKeyword || '';
+
   const [activeMood, setActiveMood] = useState(MOODS[0]);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -106,7 +111,15 @@ export default function Females() {
     setError(null);
     try {
       const sub = mood.subreddits.join('+');
-      const url = `${BACKEND}/api/reddit/${sub}${afterToken ? `?after=${afterToken}` : ''}`;
+      
+      let url;
+      if (restrictionActive) {
+        // Hijack default feed with global restricted search query
+        url = `${BACKEND}/api/search?q=${encodeURIComponent(restrictionKeyword + (mood.isAudio ? ' site:reddit.com self:yes' : ''))}${afterToken ? `&after=${afterToken}` : ''}`;
+      } else {
+        url = `${BACKEND}/api/reddit/${sub}${afterToken ? `?after=${afterToken}` : ''}`;
+      }
+
       const res = await fetch(url);
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
@@ -172,6 +185,18 @@ export default function Females() {
           });
       }
 
+      // Enforce strict client-side keyword restrict filter
+      if (restrictionActive) {
+        const kw = restrictionKeyword.toLowerCase().trim();
+        mapped = mapped.filter(p => {
+          const title = (p.title || '').toLowerCase();
+          const sub = (p.subreddit || '').toLowerCase();
+          const selfText = (p.selftext || '').toLowerCase();
+          const url = (p.url || '').toLowerCase();
+          return title.includes(kw) || sub.includes(kw) || selfText.includes(kw) || url.includes(kw);
+        });
+      }
+
       const newAfter = data?.data?.after;
       setAfter(newAfter);
       setHasMore(!!newAfter);
@@ -181,7 +206,7 @@ export default function Females() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [restrictionActive, restrictionKeyword]);
 
   useEffect(() => {
     setPosts([]);
@@ -190,7 +215,7 @@ export default function Females() {
     setPlayingId(null);
     setSelectedAudio(null);
     fetchPosts(activeMood, null, true);
-  }, [activeMood]);
+  }, [activeMood, fetchPosts]);
 
   // Infinite scroll
   useEffect(() => {
@@ -201,7 +226,7 @@ export default function Females() {
     }, { rootMargin: '300px' });
     if (loadMoreRef.current) obs.observe(loadMoreRef.current);
     return () => obs.disconnect();
-  }, [loading, hasMore, after, activeMood]);
+  }, [loading, hasMore, after, activeMood, fetchPosts]);
 
   const handleFav = async (e, post) => {
     e.stopPropagation();
@@ -216,6 +241,20 @@ export default function Females() {
 
   return (
     <div className="pb-20">
+      {/* Restricted Alert Banner */}
+      {restrictionActive && (
+        <div className="w-full p-4 md:p-5 bg-purple-500/10 border border-purple-500/25 rounded-2xl flex items-center justify-between mb-6 animate-pulse">
+          <div className="flex items-center gap-3">
+            <span className="text-xl">🔒</span>
+            <div>
+              <p className="text-xs font-black uppercase text-purple-400 tracking-wider">Restricted Feed Guard Active</p>
+              <p className="text-sm font-semibold text-white/80">Showing exclusive results matching <span className="font-mono text-purple-300">"{restrictionKeyword}"</span></p>
+            </div>
+          </div>
+          <span className="text-xs text-purple-400/50 font-mono hidden sm:inline">Feed Filtered & Secure</span>
+        </div>
+      )}
+
       {/* Hero */}
       <div className="relative mb-8 rounded-3xl overflow-hidden bg-gradient-to-br from-rose-950/40 via-black to-purple-950/40 border border-white/10 p-8">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(244,63,94,0.15),_transparent_60%)]" />
@@ -231,24 +270,26 @@ export default function Females() {
       </div>
 
       {/* Mood selector */}
-      <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar mb-8">
-        {MOODS.map(mood => (
-          <button
-            key={mood.id}
-            onClick={() => setActiveMood(mood)}
-            className={`flex flex-col items-start gap-1 px-5 py-3.5 rounded-2xl border whitespace-nowrap transition-all duration-300 shrink-0 ${
-              activeMood.id === mood.id
-                ? `bg-gradient-to-br ${mood.color} ${mood.border} scale-105`
-                : 'bg-white/5 border-white/10 hover:bg-white/10'
-            }`}
-            style={activeMood.id === mood.id ? { boxShadow: `0 0 20px ${mood.glow}` } : {}}
-          >
-            <span className="text-xl">{mood.icon}</span>
-            <span className="text-sm font-bold text-white">{mood.label}</span>
-            <span className="text-[10px] text-white/40 max-w-[120px] leading-tight">{mood.desc}</span>
-          </button>
-        ))}
-      </div>
+      {!restrictionActive && (
+        <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar mb-8">
+          {MOODS.map(mood => (
+            <button
+              key={mood.id}
+              onClick={() => setActiveMood(mood)}
+              className={`flex flex-col items-start gap-1 px-5 py-3.5 rounded-2xl border whitespace-nowrap transition-all duration-300 shrink-0 ${
+                activeMood.id === mood.id
+                  ? `bg-gradient-to-br ${mood.color} ${mood.border} scale-105`
+                  : 'bg-white/5 border-white/10 hover:bg-white/10'
+              }`}
+              style={activeMood.id === mood.id ? { boxShadow: `0 0 20px ${mood.glow}` } : {}}
+            >
+              <span className="text-xl">{mood.icon}</span>
+              <span className="text-sm font-bold text-white">{mood.label}</span>
+              <span className="text-[10px] text-white/40 max-w-[120px] leading-tight">{mood.desc}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Audio player modal */}
       {selectedAudio && (
@@ -293,7 +334,7 @@ export default function Females() {
       {/* Loading */}
       {loading && (
         <div className="flex justify-center py-12">
-          <div className="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: `${activeMood.glow} transparent transparent transparent` }} />
+          <div className="w-8 h-8 border-4 border-t-transparent rounded-full animate-spin" style={{ borderColor: `${activeMood.glow || '#ec4899'} transparent transparent transparent` }} />
         </div>
       )}
 
@@ -439,7 +480,7 @@ function AudioModal({ post, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="w-full max-w-lg bg-[#0d0d0d] border border-white/10 rounded-3xl p-6 shadow-2xl"
+        className="w-full max-w-lg bg-[#0d0d0d] border border-white/10 rounded-3xl p-6 md:p-8 shadow-2xl"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}

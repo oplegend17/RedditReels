@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { auth } from './lib/firebase';
+import { auth, db } from './lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
+import { doc, onSnapshot } from 'firebase/firestore';
 import Auth from './components/Auth';
 import Layout from './components/Layout';
 import VideoGallery from './pages/VideoGallery';
@@ -12,20 +13,55 @@ import Stats from './pages/Stats';
 import Favorites from './components/Favorites';
 import UserProfile from './components/UserProfile';
 import Females from './pages/Females';
+import Admin from './pages/Admin';
 
 
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [consentGiven, setConsentGiven] = useState(() => localStorage.getItem('reddit-reels-consent') === 'true');
 
-  // Firebase Auth
+  // Firebase Auth & Real-time Profile Listener
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    let unsubscribeProfile = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      setLoading(false);
+
+      if (currentUser) {
+        // Subscribe to user profile document in Firestore
+        const profileRef = doc(db, 'users', currentUser.uid);
+        unsubscribeProfile = onSnapshot(profileRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setProfile(data);
+            setIsAdmin(data.role === 'admin');
+          } else {
+            setProfile(null);
+            setIsAdmin(false);
+          }
+          setLoading(false);
+        }, (error) => {
+          console.error("Error loading user profile:", error);
+          setLoading(false);
+        });
+      } else {
+        setProfile(null);
+        setIsAdmin(false);
+        setLoading(false);
+        if (unsubscribeProfile) {
+          unsubscribeProfile();
+          unsubscribeProfile = null;
+        }
+      }
     });
-    return () => unsubscribe();
+
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeProfile) unsubscribeProfile();
+    };
   }, []);
 
   if (loading) {
@@ -65,7 +101,7 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Layout />}>
+        <Route path="/" element={<Layout profile={profile} isAdmin={isAdmin} />}>
           <Route index element={<VideoGallery />} />
           <Route path="images" element={<ImageGallery />} />
           <Route path="reels" element={<Reels />} />
@@ -75,6 +111,7 @@ function App() {
           <Route path="stats" element={<Stats />} />
           <Route path="favorites" element={<Favorites />} />
           <Route path="profile" element={<UserProfile user={user} />} />
+          <Route path="admin" element={<Admin />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

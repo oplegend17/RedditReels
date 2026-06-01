@@ -167,82 +167,98 @@ export const useAchievements = () => {
     });
   }, [unlockedAchievements, persistStats]);
 
-  const recordChallengeComplete = useCallback((challengeType, durationSeconds = 0) => {
+  const recordChallengeComplete = useCallback((challengeType, durationSeconds = 0, success = true) => {
     const today = new Date().toDateString();
     const durationMinutes = Math.floor(durationSeconds / 60);
 
     setStats(prev => {
       const updated = { ...prev };
 
-      // Base XP
-      let xpGain = 100 + durationMinutes * 10;
-      updated.xp = (prev.xp || 0) + xpGain;
+      if (success) {
+        // Base XP for success
+        let xpGain = 100 + durationMinutes * 10;
+        updated.xp = (prev.xp || 0) + xpGain;
 
-      // Total challenges
-      updated.challengesCompleted = (prev.challengesCompleted || 0) + 1;
+        // Total challenges completed successfully
+        updated.challengesCompleted = (prev.challengesCompleted || 0) + 1;
 
-      // Per-type stat — map challengeType id to stat key
-      const typeStatMap = {
-        tryNotToCum: 'tryNotToCumCompleted',
-        enduranceRun: 'enduranceRunCompleted',
-        roulette: 'rouletteCompleted',
-        tenMinute: 'tenMinuteChallengeCompleted',
-        rapidFire: 'rapidFireCompleted',
-        noControl: 'noControlCompleted',
-      };
-      const typeKey = typeStatMap[challengeType];
-      if (typeKey) updated[typeKey] = (prev[typeKey] || 0) + 1;
+        // Per-type stat — map challengeType id to stat key
+        const typeStatMap = {
+          tryNotToCum: 'tryNotToCumCompleted',
+          enduranceRun: 'enduranceRunCompleted',
+          roulette: 'rouletteCompleted',
+          tenMinute: 'tenMinuteChallengeCompleted',
+          rapidFire: 'rapidFireCompleted',
+          noControl: 'noControlCompleted',
+        };
+        const typeKey = typeStatMap[challengeType];
+        if (typeKey) updated[typeKey] = (prev[typeKey] || 0) + 1;
 
-      // Roulette rounds (same as roulette completed for now)
-      if (challengeType === 'roulette') {
-        updated.rouletteRoundsCompleted = (prev.rouletteRoundsCompleted || 0) + 1;
-      }
+        // Roulette rounds (same as roulette completed for now)
+        if (challengeType === 'roulette') {
+          updated.rouletteRoundsCompleted = (prev.rouletteRoundsCompleted || 0) + 1;
+        }
 
-      // Endurance run duration record (in minutes)
-      if (challengeType === 'enduranceRun' && durationMinutes > (prev.enduranceRunMinutes || 0)) {
-        updated.enduranceRunMinutes = durationMinutes;
-      }
+        // Endurance run duration record (in minutes)
+        if (challengeType === 'enduranceRun' && durationMinutes > (prev.enduranceRunMinutes || 0)) {
+          updated.enduranceRunMinutes = durationMinutes;
+        }
 
-      // Consecutive challenges (same day)
-      if (prev.lastChallengeDate === today) {
-        updated.currentConsecutive = (prev.currentConsecutive || 0) + 1;
+        // Consecutive challenges (same day)
+        if (prev.lastChallengeDate === today) {
+          updated.currentConsecutive = (prev.currentConsecutive || 0) + 1;
+        } else {
+          updated.currentConsecutive = 1;
+        }
+        updated.consecutiveChallenges = Math.max(
+          prev.consecutiveChallenges || 0,
+          updated.currentConsecutive
+        );
+
+        // Daily streak
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = yesterday.toDateString();
+
+        if (prev.lastChallengeDate === yesterdayStr) {
+          updated.dailyStreak = (prev.dailyStreak || 0) + 1;
+          updated.xp += updated.dailyStreak * 50; // streak bonus
+        } else if (prev.lastChallengeDate !== today) {
+          updated.dailyStreak = 1;
+        }
+        updated.lastChallengeDate = today;
+
+        // Challenge dates for perfect week tracking
+        const challengeDates = [...(prev.challengeDates || [])];
+        if (!challengeDates.includes(today)) challengeDates.push(today);
+        updated.challengeDates = challengeDates.slice(-30);
+
+        // Perfect days (consecutive days with at least one challenge)
+        const sorted = [...challengeDates].sort((a, b) => new Date(b) - new Date(a));
+        let perfectDays = 0;
+        for (let i = 0; i < sorted.length; i++) {
+          const expected = new Date();
+          expected.setDate(expected.getDate() - i);
+          if (new Date(sorted[i]).toDateString() === expected.toDateString()) {
+            perfectDays++;
+          } else break;
+        }
+        updated.perfectDays = perfectDays;
       } else {
-        updated.currentConsecutive = 1;
+        // Partial XP for failure (duration-based effort)
+        let xpGain = Math.max(10, durationMinutes * 5);
+        updated.xp = (prev.xp || 0) + xpGain;
+        
+        // Special Case: Endurance Run ends when user clicks "I Give Up", which triggers a failure/exit.
+        // We should record it as completed and update maximum endurance minutes record.
+        if (challengeType === 'enduranceRun') {
+          updated.enduranceRunCompleted = (prev.enduranceRunCompleted || 0) + 1;
+          updated.challengesCompleted = (prev.challengesCompleted || 0) + 1;
+          if (durationMinutes > (prev.enduranceRunMinutes || 0)) {
+            updated.enduranceRunMinutes = durationMinutes;
+          }
+        }
       }
-      updated.consecutiveChallenges = Math.max(
-        prev.consecutiveChallenges || 0,
-        updated.currentConsecutive
-      );
-
-      // Daily streak
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toDateString();
-
-      if (prev.lastChallengeDate === yesterdayStr) {
-        updated.dailyStreak = (prev.dailyStreak || 0) + 1;
-        updated.xp += updated.dailyStreak * 50; // streak bonus
-      } else if (prev.lastChallengeDate !== today) {
-        updated.dailyStreak = 1;
-      }
-      updated.lastChallengeDate = today;
-
-      // Challenge dates for perfect week tracking
-      const challengeDates = [...(prev.challengeDates || [])];
-      if (!challengeDates.includes(today)) challengeDates.push(today);
-      updated.challengeDates = challengeDates.slice(-30);
-
-      // Perfect days (consecutive days with at least one challenge)
-      const sorted = [...challengeDates].sort((a, b) => new Date(b) - new Date(a));
-      let perfectDays = 0;
-      for (let i = 0; i < sorted.length; i++) {
-        const expected = new Date();
-        expected.setDate(expected.getDate() - i);
-        if (new Date(sorted[i]).toDateString() === expected.toDateString()) {
-          perfectDays++;
-        } else break;
-      }
-      updated.perfectDays = perfectDays;
 
       persistStats(updated, unlockedAchievements);
       return updated;

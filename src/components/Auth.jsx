@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { auth } from '../lib/firebase';
+import { auth, db } from '../lib/firebase';
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword,
   updateProfile 
 } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
 
 export default function Auth() {
   const [loading, setLoading] = useState(false);
@@ -29,9 +30,18 @@ export default function Auth() {
         // Update profile with username if provided
         if (username) {
           await updateProfile(userCredential.user, {
-            displayName: username
+            displayName: username.trim()
           });
         }
+
+        // Create user profile in Firestore
+        await setDoc(doc(db, 'users', userCredential.user.uid), {
+          username: username.trim() || email.split('@')[0],
+          email: email.trim(),
+          role: 'user',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
         
         setSuccessMsg('Sign up successful! Welcome to Reddit Reels!');
       } else {

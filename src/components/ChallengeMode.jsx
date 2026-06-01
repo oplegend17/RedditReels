@@ -198,7 +198,7 @@ export default function ChallengeMode() {
       
       // Mark as seen
       if (currentVideo) {
-        markAsSeen(currentVideo.id);
+        markAsSeen(currentVideo);
       }
 
       // Fetch more videos if running low
@@ -245,10 +245,11 @@ export default function ChallengeMode() {
       skipCount: challenges.skipCount,
     };
 
-    // Record achievement progress — pass raw seconds
+    // Record achievement progress — pass raw seconds and success=true
     achievements.recordChallengeComplete(
       challengeData.challengeType,
-      challengeData.duration
+      challengeData.duration,
+      true
     );
 
     // Add to leaderboard
@@ -269,9 +270,9 @@ export default function ChallengeMode() {
 
     const challengeData = challenges.failChallenge(reason);
 
-    // Still record partial progress for achievements
+    // Still record partial progress for achievements - success=false
     if (challengeData.duration > 30) {
-      achievements.recordChallengeComplete(challengeData.challengeType, challengeData.duration);
+      achievements.recordChallengeComplete(challengeData.challengeType, challengeData.duration, false);
     }
 
     setResults({ ...challengeData, success: false, intensity: intensity.intensity });

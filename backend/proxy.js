@@ -4,6 +4,10 @@ import cors from "cors";
 import dotenv from "dotenv";
 import Cerebras from "@cerebras/cerebras_cloud_sdk";
 import { DEFAULT_SUBREDDITS, SUBREDDIT_CATEGORIES } from "./subreddits.js";
+import ffmpeg from "fluent-ffmpeg";
+import ffmpegPath from "ffmpeg-static";
+
+ffmpeg.setFfmpegPath(ffmpegPath);
 
 dotenv.config();
 
@@ -224,11 +228,17 @@ app.get("/api/reddit/:subreddit", async (req, res) => {
   try {
     const token = await getRedditAccessToken();
     const subreddit = req.params.subreddit.trim();
+    const sort = req.query.sort || "hot";
+    const t = req.query.t || "all";
     const after = req.query.after || "";
     const limit = 50;
-    const url = `https://oauth.reddit.com/r/${subreddit}/hot.json?limit=${limit}&raw_json=1${
-      after ? `&after=${after}` : ""
-    }`;
+    let url = `https://oauth.reddit.com/r/${subreddit}/${sort}.json?limit=${limit}&raw_json=1`;
+    if (sort === "top" && t) {
+      url += `&t=${t}`;
+    }
+    if (after) {
+      url += `&after=${after}`;
+    }
     console.log(`🔎 Fetching subreddit with OAuth: ${url}`);
     const response = await fetch(url, { headers: buildHeaders(token) });
 
@@ -454,6 +464,104 @@ app.get('/api/proxy-image', async (req, res) => {
     response.body.pipe(res);
   } catch (err) {
     res.status(500).json({ error: 'Proxy error: ' + err.toString() });
+  }
+});
+
+// Endpoint to merge video and audio tracks for Reddit video downloads
+app.get('/api/merge-video', async (req, res) => {
+  const videoUrl = req.query.url;
+  if (!videoUrl) {
+    return res.status(400).json({ error: 'Missing video URL' });
+  }
+
+  const userAgent = process.env.REDDIT_USER_AGENT || browserUA;
+
+  try {
+    const baseUrlMatch = videoUrl.match(/^(https?:\/\/v\.redd\.it\/[^\/]+\/)/);
+    if (!baseUrlMatch) {
+      console.log(`[Proxy] Direct proxying non-reddit video: ${videoUrl}`);
+      const videoRes = await fetch(videoUrl, {
+        headers: { 'User-Agent': userAgent }
+      });
+      res.setHeader('Content-Type', videoRes.headers.get('content-type') || 'video/mp4');
+      videoRes.body.pipe(res);
+      return;
+    }
+
+    const baseUrl = baseUrlMatch[1];
+    
+    // Candidates for both CMAF and DASH audio tracks
+    const audioCandidates = [
+      `${baseUrl}CMAF_AUDIO_128.mp4`,
+      `${baseUrl}CMAF_audio.mp4`,
+      `${baseUrl}DASH_AUDIO_128.mp4`,
+      `${baseUrl}DASH_audio.mp4`,
+      `${baseUrl}DASH_AUDIO_64.mp4`,
+      `${baseUrl}DASH_AUDIO_96.mp4`,
+      `${baseUrl}audio`
+    ];
+
+    let audioUrl = null;
+    for (const candidate of audioCandidates) {
+      try {
+        const headRes = await fetch(candidate, {
+          method: 'HEAD',
+          headers: { 'User-Agent': userAgent }
+        });
+        if (headRes.ok) {
+          audioUrl = candidate;
+          break;
+        }
+      } catch (_) {}
+    }
+
+    if (!audioUrl) {
+      console.log(`[Proxy] No audio stream found for ${videoUrl}. Streaming video directly.`);
+      const videoRes = await fetch(videoUrl, {
+        headers: { 'User-Agent': userAgent }
+      });
+      res.setHeader('Content-Type', videoRes.headers.get('content-type') || 'video/mp4');
+      videoRes.body.pipe(res);
+      return;
+    }
+
+    console.log(`[FFmpeg] Merging video: ${videoUrl} with audio: ${audioUrl}`);
+
+    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Content-Disposition', 'attachment; filename="video.mp4"');
+
+    const command = ffmpeg()
+      .input(videoUrl)
+      .inputOptions([
+        '-user_agent', userAgent
+      ])
+      .input(audioUrl)
+      .inputOptions([
+        '-user_agent', userAgent
+      ])
+      .outputOptions('-c:v copy')      // copy video track directly (blazing fast, 0 CPU!)
+      .outputOptions('-c:a aac')       // transcode audio track to standard AAC
+      .outputOptions('-map 0:v:0')     // map video from input 0
+      .outputOptions('-map 1:a:0')     // map audio from input 1
+      .outputOptions('-shortest')      // end when the shortest input ends
+      .format('mp4')
+      .on('error', (err) => {
+        console.error('[FFmpeg] Error merging tracks:', err.message);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'FFmpeg merging failed' });
+        }
+      })
+      .on('end', () => {
+        console.log('[FFmpeg] Merged successfully!');
+      });
+
+    command.pipe(res, { end: true });
+
+  } catch (err) {
+    console.error('Merge proxy error:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ error: err.toString() });
+    }
   }
 });
 

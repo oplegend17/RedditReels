@@ -99,7 +99,12 @@ export function useHistory() {
     return () => window.removeEventListener('beforeunload', handleUnload);
   }, [user]);
 
-  const markAsSeen = (videoId) => {
+  const markAsSeen = async (video) => {
+    if (!video) return;
+    
+    const isObject = typeof video === 'object';
+    const videoId = isObject ? video.id : video;
+    
     if (!videoId) return;
     
     setSeenIds(prev => {
@@ -123,6 +128,24 @@ export function useHistory() {
       
       return newSet;
     });
+
+    if (isObject && user) {
+      try {
+        const watchDocRef = doc(db, 'users', user.uid, 'watched', videoId);
+        await setDoc(watchDocRef, {
+          id: videoId,
+          videoId: videoId,
+          title: video.title || 'Untitled',
+          url: video.url || '',
+          thumbnail: video.thumbnail || '',
+          subreddit: video.subreddit || '',
+          watchedAt: new Date()
+        }, { merge: true });
+        console.log(`Saved video ${videoId} metadata to watch history subcollection`);
+      } catch (error) {
+        console.error("Error saving watched video metadata:", error);
+      }
+    }
   };
 
   const isSeen = (videoId) => {

@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
+import { useOutletContext } from 'react-router-dom';
 import { auth, db } from '../lib/firebase';
 import { updateProfile } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useAchievements } from '../lib/useAchievements';
 import { useFavorites } from '../lib/useFavorites';
+import { useDownloads } from '../lib/useDownloads';
 import { useFavoriteSubreddits } from '../lib/useFavoriteSubreddits';
 import { useHistory } from '../lib/useHistory';
 import { ACHIEVEMENT_TIERS } from '../lib/achievements';
@@ -65,20 +67,37 @@ function achievementEmoji(iconName) {
   return map[iconName] || '🏅';
 }
 
-const TABS = ['Overview', 'Achievements', 'Favorites', 'Subreddits', 'Settings'];
+const TABS = ['Overview', 'Achievements', 'Favorites', 'Downloads', 'Subreddits', 'Settings'];
 
 export default function UserProfile({ user }) {
+  const { profile, isAdmin } = useOutletContext();
   const [loading, setLoading] = useState(true);
   const [username, setUsername] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [joinDate, setJoinDate] = useState(null);
   const [updating, setUpdating] = useState(false);
   const [updateMsg, setUpdateMsg] = useState(null);
+
+  const toggleAdminMode = async () => {
+    setUpdating(true);
+    try {
+      const newRole = profile?.role === 'admin' ? 'user' : 'admin';
+      await setDoc(doc(db, 'users', user.uid), { role: newRole }, { merge: true });
+      setUpdateMsg(newRole === 'admin' ? 'Promoted to Admin!' : 'Role set to User.');
+      setTimeout(() => setUpdateMsg(null), 2000);
+    } catch (err) {
+      setUpdateMsg('Error: ' + err.message);
+      setTimeout(() => setUpdateMsg(null), 3000);
+    } finally {
+      setUpdating(false);
+    }
+  };
   const [activeTab, setActiveTab] = useState('Overview');
   const [selectedVideo, setSelectedVideo] = useState(null);
 
   const { stats, level, levelProgress, unlockedAchievements, allAchievements, getProgress } = useAchievements();
   const { favorites } = useFavorites();
+  const { downloads } = useDownloads();
   const { favoriteSubreddits, removeFavoriteSubreddit } = useFavoriteSubreddits();
   const { seenIds } = useHistory();
 
@@ -210,6 +229,11 @@ export default function UserProfile({ user }) {
               <p className="text-2xl font-black text-white">{favorites.length}</p>
               <p className="text-[10px] text-white/40">Saved</p>
             </div>
+            <div className="w-px bg-white/10" />
+            <div className="text-center">
+              <p className="text-2xl font-black text-white">{downloads.length}</p>
+              <p className="text-[10px] text-white/40">Downloads</p>
+            </div>
           </div>
         </div>
       </div>
@@ -246,6 +270,7 @@ export default function UserProfile({ user }) {
             <StatCard label="Nuclear Watched" value={stats.nuclearVideosWatched || 0} icon="☢️" />
             <StatCard label="Fire Watched" value={stats.fireVideosWatched || 0} icon="🔥" />
             <StatCard label="Saved Videos" value={favorites.length} icon="❤️" />
+            <StatCard label="Videos Downloaded" value={downloads.length} icon="📥" />
             <StatCard label="Fav Subreddits" value={favoriteSubreddits.length} icon="⭐" />
           </div>
 
@@ -320,6 +345,38 @@ export default function UserProfile({ user }) {
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {favorites.map(vid => (
+                <div
+                  key={vid.id}
+                  onClick={() => setSelectedVideo(vid)}
+                  className="group relative aspect-[9/16] bg-black rounded-2xl overflow-hidden border border-white/5 hover:border-white/20 cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+                >
+                  {vid.thumbnail ? (
+                    <img src={vid.thumbnail} alt={vid.title} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-white/5 flex items-center justify-center text-3xl">▶️</div>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <div className="absolute bottom-0 left-0 right-0 p-3 translate-y-2 group-hover:translate-y-0 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                    <p className="text-xs text-white font-medium line-clamp-2">{vid.title}</p>
+                    <p className="text-[10px] text-white/50 mt-0.5">r/{vid.subreddit}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {/* Downloads */}
+      {activeTab === 'Downloads' && (
+        <div>
+          {downloads.length === 0 ? (
+            <div className="flex flex-col items-center py-20 gap-3 text-white/30">
+              <span className="text-5xl">📥</span>
+              <p>No downloaded videos yet</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {downloads.map(vid => (
                 <div
                   key={vid.id}
                   onClick={() => setSelectedVideo(vid)}
@@ -420,6 +477,42 @@ export default function UserProfile({ user }) {
             >
               {updating ? 'Saving...' : updateMsg || 'Save Changes'}
             </button>
+
+            {/* Developer Section */}
+            <div className="pt-5 border-t border-white/10 space-y-3">
+              <label className="text-xs font-bold text-yellow-500 uppercase tracking-wider flex items-center gap-1.5">
+                <span>🛠️</span> Developer Options
+              </label>
+              <div className="p-4 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-bold text-white">Dev Admin Mode</p>
+                  <p className="text-xs text-white/40">Instantly elevate or revoke Admin role</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleAdminMode}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition-all duration-300 border ${
+                    isAdmin
+                      ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-400'
+                      : 'bg-white/5 border-white/10 text-white/60 hover:text-white'
+                  }`}
+                >
+                  {isAdmin ? '★ Admin Mode Active' : '☆ Enable Admin'}
+                </button>
+              </div>
+
+              {profile?.restrictionType && profile?.restrictionType !== 'none' && (
+                <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-2xl flex items-center gap-3">
+                  <span className="text-2xl">🔒</span>
+                  <div>
+                    <p className="text-sm font-bold text-purple-200">Restricted Mode Enforced</p>
+                    <p className="text-xs text-purple-300/60">
+                      You are restricted to see only <span className="font-mono text-purple-400">"{profile.restrictionKeyword}"</span> content.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
 
             <div className="pt-4 border-t border-white/10">
               <button
