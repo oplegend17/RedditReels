@@ -1,120 +1,177 @@
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
-import { getRedditHlsUrl, isRedditUrl, isRedgifsUrl, getRedgifsId } from '../lib/media-utils';
+import { getRedditHlsUrl, isRedditUrl, getRedgifsId } from '../lib/media-utils';
 
-const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL;
+const BACKEND = import.meta.env.VITE_BACKEND_API_URL;
 
 export default function VideoModal({ video, onClose, isRedgifs, originalUrl }) {
   const videoRef = useRef(null);
-  const [currentSrc, setCurrentSrc] = useState(video.url);
+  const hlsRef   = useRef(null);
+  const [src, setSrc]     = useState(video.url);
+  const [muted, setMuted] = useState(false);
 
+  /* ── Escape key ── */
   useEffect(() => {
-    const handleEsc = (e) => {
-      if (e.key === 'Escape') onClose();
+    const handler = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handler);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', handler);
+      document.body.style.overflow = '';
     };
-    window.addEventListener('keydown', handleEsc);
-    return () => window.removeEventListener('keydown', handleEsc);
   }, [onClose]);
 
+  /* ── Resolve src (redgifs proxy) ── */
   useEffect(() => {
     if (isRedgifs && originalUrl) {
-        const id = getRedgifsId(originalUrl);
-        if (id) {
-            fetch(`${BACKEND_API_URL}/api/redgifs/${id}`)
-                .then(r => r.json())
-                .then(d => {
-                    if (d.url) setCurrentSrc(d.url);
-                })
-                .catch(() => {});
-        }
-    } else {
-        setCurrentSrc(video.url);
+      const id = getRedgifsId(originalUrl);
+      if (id) {
+        fetch(`${BACKEND}/api/redgifs/${id}`)
+          .then(r => r.json())
+          .then(d => { if (d.url) setSrc(d.url); })
+          .catch(() => {});
+        return;
+      }
     }
+    setSrc(video.url);
   }, [video.url, isRedgifs, originalUrl]);
 
+  /* ── HLS attach ── */
   useEffect(() => {
-    if (!videoRef.current) return;
-    
-    const hlsSrc = isRedditUrl(currentSrc) ? getRedditHlsUrl(currentSrc) : currentSrc;
-    
-    let hls = null;
-    if (hlsSrc.includes('.m3u8')) {
-        if (Hls.isSupported()) {
-            hls = new Hls();
-            hls.loadSource(hlsSrc);
-            hls.attachMedia(videoRef.current);
-            hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                videoRef.current.play().catch(e => {
-                  if (e.name === 'NotAllowedError') {
-                    videoRef.current.muted = true;
-                    videoRef.current.play();
-                  }
-                });
-            });
-        } else if (videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
-            videoRef.current.src = hlsSrc;
-        }
+    if (!videoRef.current || !src) return;
+    if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
+
+    const hlsSrc = isRedditUrl(src) ? getRedditHlsUrl(src) : src;
+    if (hlsSrc?.includes('.m3u8')) {
+      if (Hls.isSupported()) {
+        const hls = new Hls();
+        hls.loadSource(hlsSrc);
+        hls.attachMedia(videoRef.current);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          videoRef.current?.play().catch(() => {
+            setMuted(true);
+            videoRef.current.muted = true;
+            videoRef.current?.play().catch(() => {});
+          });
+        });
+        hlsRef.current = hls;
+      } else if (videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
+        videoRef.current.src = hlsSrc;
+      }
     } else {
-        videoRef.current.src = currentSrc;
+      videoRef.current.src = src;
+      videoRef.current?.play().catch(() => {
+        setMuted(true);
+        videoRef.current.muted = true;
+        videoRef.current?.play().catch(() => {});
+      });
     }
 
-    return () => {
-        if (hls) hls.destroy();
-    };
-  }, [currentSrc]);
+    return () => { if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; } };
+  }, [src]);
+
+  /* ── Mute sync ── */
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.muted = muted;
+  }, [muted]);
 
   const handleDownload = async () => {
     try {
-      const response = await fetch(currentSrc || video.url);
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${video.title}.mp4`;
+      const r = await fetch(src || video.url);
+      const blob = await r.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = Object.assign(document.createElement('a'), {
+        href: url,
+        download: `${(video.title || 'video').slice(0, 40)}.mp4`,
+      });
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
+      URL.revokeObjectURL(url);
       document.body.removeChild(a);
-    } catch (error) {
-      console.error('Download failed:', error);
-    }
+    } catch { /* silent */ }
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md animate-in fade-in duration-300" onClick={onClose}>
-      <div className="relative flex flex-col md:flex-row gap-8 max-w-[95vw] max-h-[90vh] p-4 md:p-8 bg-black/40 border border-white/10 rounded-3xl backdrop-blur-xl shadow-2xl animate-in zoom-in-95 duration-300" onClick={e => e.stopPropagation()}>
-        <button 
-          className="absolute -top-4 -right-4 md:top-4 md:right-4 w-10 h-10 flex items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 hover:rotate-90 transition-all duration-300 z-50 backdrop-blur-md" 
-          onClick={onClose}
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-        </button>
-        
-        <div className="order-2 md:order-1 w-full md:w-80 flex flex-col gap-6 h-fit self-center">
-          <h2 className="text-2xl font-bold text-white leading-tight text-glow">{video.title}</h2>
-          <div className="flex flex-col gap-4 mt-auto">
-             <button 
-              className="flex items-center justify-center gap-3 px-6 py-4 bg-neon-pink hover:bg-red-600 text-white rounded-xl font-bold shadow-[0_0_20px_rgba(255,47,86,0.3)] hover:shadow-[0_0_30px_rgba(255,47,86,0.5)] hover:-translate-y-0.5 transition-all duration-300 cursor-pointer" 
-              onClick={handleDownload}
-            >
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-              Download Video
-            </button>
-          </div>
-        </div>
+    <div
+      className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center
+        bg-black/88 backdrop-blur-sm"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={video.title}>
 
-        <div className="order-1 md:order-2 relative rounded-2xl overflow-hidden shadow-2xl shadow-black/50 border border-white/5">
+      <div
+        className="relative w-full sm:w-auto flex flex-col sm:flex-row gap-0 sm:gap-6
+          sm:max-w-[90vw] max-h-[100dvh] sm:max-h-[90vh]
+          bg-[#0f0f0f] sm:bg-black/50 border-0 sm:border border-white/10
+          rounded-t-3xl sm:rounded-2xl overflow-hidden backdrop-blur-xl shadow-2xl"
+        onClick={e => e.stopPropagation()}>
+
+        {/* Close */}
+        <button
+          className="absolute top-3 right-3 z-20 w-9 h-9 flex items-center justify-center
+            rounded-full bg-black/60 text-white/60 hover:text-white hover:bg-black/80
+            transition-all duration-150"
+          onClick={onClose}
+          aria-label="Close">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+
+        {/* Video — full width on mobile, auto on desktop */}
+        <div className="relative w-full sm:w-auto bg-black shrink-0">
           <video
             ref={videoRef}
+            poster={video.thumbnail}
             controls
-            autoPlay
             loop
-            className="max-h-[50vh] md:max-h-[80vh] w-auto object-contain bg-black"
-          />
+            playsInline
+            muted={muted}
+            className="w-full sm:w-auto max-h-[60dvh] sm:max-h-[80vh] object-contain block" />
+
+          {/* Mute toggle overlay */}
+          <button
+            className={`absolute bottom-12 right-3 w-8 h-8 rounded-full flex items-center
+              justify-center bg-black/60 backdrop-blur-sm border border-white/10
+              text-white transition-all duration-150 hover:bg-black/80 ${muted ? 'opacity-100' : 'opacity-60 hover:opacity-100'}`}
+            onClick={() => setMuted(m => !m)}
+            aria-label={muted ? 'Unmute' : 'Mute'}>
+            {muted
+              ? <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                    d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                  <line x1="17" y1="17" x2="7" y2="7" stroke="currentColor" strokeWidth="2" />
+                </svg>
+              : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                    d="M15.536 8.464a5 5 0 010 7.072M18.364 5.636a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                </svg>
+            }
+          </button>
+        </div>
+
+        {/* Info panel */}
+        <div className="flex flex-col gap-4 p-5 sm:py-6 sm:pr-6 sm:pl-0 sm:w-72 shrink-0">
+          <p className="text-[11px] font-bold text-white/30 uppercase tracking-wider">
+            r/{video.subreddit}
+          </p>
+          <h2 className="text-base font-bold text-white leading-snug line-clamp-4 flex-1">
+            {video.title}
+          </h2>
+          <button
+            onClick={handleDownload}
+            className="flex items-center justify-center gap-2 py-3 px-5 rounded-xl
+              bg-neon-pink hover:bg-red-600 text-white font-bold text-sm
+              shadow-[0_0_20px_rgba(255,47,86,0.25)] hover:shadow-[0_0_28px_rgba(255,47,86,0.4)]
+              transition-all duration-200 active:scale-95">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Download
+          </button>
         </div>
       </div>
     </div>

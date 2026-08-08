@@ -6,66 +6,63 @@
   --color-dark-bg: #0a0a0a;
   --color-glass: rgba(255, 255, 255, 0.05);
   --color-glass-border: rgba(255, 255, 255, 0.1);
-  
-  --animate-float: float 6s ease-in-out infinite;
-  --animate-glow: glow 2s ease-in-out infinite alternate;
-
-  @keyframes float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-10px); }
-  }
-  
-  @keyframes glow {
-    from { box-shadow: 0 0 10px rgba(255, 47, 86, 0.5); }
-    to { box-shadow: 0 0 20px rgba(255, 47, 86, 0.8), 0 0 30px rgba(255, 47, 86, 0.6); }
-  }
 }
 
 @layer base {
+  :root {
+    color-scheme: dark;
+  }
+
   body {
-    background-color: var(--color-dark-bg);
+    background-color: #0a0a0a;
     color: white;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     overflow-x: hidden;
     background-image: radial-gradient(circle at 50% 0%, #1a1a2e 0%, #000000 100%);
     min-height: 100vh;
+    /* iOS safe-area support */
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Focus-visible: keyboard nav only, matches the dark theme */
+  :focus-visible {
+    outline: 2px solid var(--color-neon-pink);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  /* Remove default focus ring on mouse click */
+  :focus:not(:focus-visible) {
+    outline: none;
   }
 
   /* Custom Scrollbar */
-  ::-webkit-scrollbar {
-    width: 6px;
-  }
-  
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  
-  ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 10px;
-  }
-  
-  ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.4);
-  }
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 10px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
 }
 
 @layer utilities {
+  /* ── Core tokens ── */
   .glass-panel {
     @apply bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl;
   }
-  
+
   .text-glow {
-    text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+    text-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
   }
 
-  /* Liquid Splash Animation */
-  @keyframes splash {
-    0% { transform: scale(1); opacity: 1; }
-    50% { transform: scale(1.5); opacity: 0.5; }
-    100% { transform: scale(2); opacity: 0; }
+  /* ── No scrollbar ── */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+  /* ── Safe-area bottom padding for mobile tab bar ── */
+  .safe-area-pb {
+    padding-bottom: env(safe-area-inset-bottom);
   }
 
+  /* ── Liquid heart splash ── */
   .liquid-splash {
     position: absolute;
     top: 50%;
@@ -74,102 +71,21 @@
     width: 100%;
     height: 100%;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(255,47,86,0.8) 0%, rgba(255,47,86,0) 70%);
+    background: radial-gradient(circle, rgba(255,47,86,0.7) 0%, rgba(255,47,86,0) 70%);
     opacity: 0;
     pointer-events: none;
   }
 
+  @keyframes splash {
+    0%   { transform: translate(-50%,-50%) scale(1); opacity: 1; }
+    100% { transform: translate(-50%,-50%) scale(2.2); opacity: 0; }
+  }
+
   .liquid-active .liquid-splash {
-    animation: splash 0.6s ease-out forwards;
+    animation: splash 0.5s ease-out forwards;
   }
 
-  /* Heat Seeker Badges */
-  .badge-nuclear {
-    background: linear-gradient(135deg, #ff0000, #ff8800);
-    box-shadow: 0 0 15px #ff4400;
-    animation: pulse-fast 1s infinite;
-  }
-
-  .badge-fire {
-    background: linear-gradient(135deg, #ff4400, #ffcc00);
-    box-shadow: 0 0 10px #ff8800;
-  }
-
-  .badge-spicy {
-    background: linear-gradient(135deg, #ff00cc, #ff0066);
-    box-shadow: 0 0 10px #ff0066;
-  }
-
-  @keyframes pulse-fast {
-    0%, 100% { transform: scale(1); opacity: 1; }
-    50% { transform: scale(1.05); opacity: 0.9; }
-  }
-
-  /* Challenge Mode Animations */
-  @keyframes pulse-danger {
-    0%, 100% { opacity: 0.3; }
-    50% { opacity: 0.6; }
-  }
-
-  @keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
-    20%, 40%, 60%, 80% { transform: translateX(2px); }
-  }
-
-  @keyframes chromatic-ab {
-    0%, 100% { text-shadow: -2px 0 red, 2px 0 blue; }
-    50% { text-shadow: 2px 0 red, -2px 0 blue; }
-  }
-
-  @keyframes sparkle {
-    0%, 100% { 
-      opacity: 0;
-      transform: scale(0) rotate(0deg);
-    }
-    50% { 
-      opacity: 1;
-      transform: scale(1) rotate(180deg);
-    }
-  }
-
-  .sparkle-effect {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-  }
-
-  .sparkle-effect::before,
-  .sparkle-effect::after {
-    content: '✨';
-    position: absolute;
-    font-size: 30px;
-    animation: sparkle 2s ease-in-out infinite;
-  }
-
-  .sparkle-effect::before {
-    top: 10%;
-    left: 10%;
-    animation-delay: 0s;
-  }
-
-  .sparkle-effect::after {
-    bottom: 10%;
-    right: 10%;
-    animation-delay: 1s;
-  }
-
-  /* No scrollbar utility */
-  .no-scrollbar::-webkit-scrollbar {
-    display: none;
-  }
-  
-  .no-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-
-  /* Intensity-based screen vignette */
+  /* ── Intensity vignette ── */
   .intensity-vignette {
     position: fixed;
     inset: 0;
@@ -178,19 +94,79 @@
     transition: opacity 0.3s ease-out;
   }
 
-  /* Countdown number animation */
+  /* ── Challenge: danger pulse ── */
+  @keyframes pulse-danger {
+    0%, 100% { opacity: 0.3; }
+    50%       { opacity: 0.6; }
+  }
+
+  /* ── Challenge: shake ── */
+  @keyframes shake {
+    0%, 100%                    { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90%     { transform: translateX(-2px); }
+    20%, 40%, 60%, 80%          { transform: translateX(2px); }
+  }
+
+  /* ── Challenge: countdown ── */
   @keyframes countdown-pulse {
-    0% { 
-      transform: scale(1);
-      opacity: 1;
-    }
-    50% { 
-      transform: scale(1.2);
-      opacity: 0.8;
-    }
-    100% { 
-      transform: scale(0.8);
-      opacity: 0;
+    0%   { transform: scale(1); opacity: 1; }
+    50%  { transform: scale(1.2); opacity: 0.8; }
+    100% { transform: scale(0.8); opacity: 0; }
+  }
+
+  /* ── Achievement popup sparkle ── */
+  @keyframes sparkle {
+    0%, 100% { opacity: 0; transform: scale(0) rotate(0deg); }
+    50%      { opacity: 1; transform: scale(1) rotate(180deg); }
+  }
+
+  .sparkle-effect {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    border-radius: inherit;
+  }
+
+  .sparkle-effect::before,
+  .sparkle-effect::after {
+    content: '✨';
+    position: absolute;
+    font-size: 24px;
+    animation: sparkle 2s ease-in-out infinite;
+  }
+
+  .sparkle-effect::before { top: 8%; left: 8%; animation-delay: 0s; }
+  .sparkle-effect::after  { bottom: 8%; right: 8%; animation-delay: 1s; }
+
+  /* Heat dot glows — used on video cards */
+  .heat-dot-nuclear {
+    background: #ef4444;
+    box-shadow: 0 0 8px rgba(239,68,68,0.9);
+  }
+  .heat-dot-fire {
+    background: #fb923c;
+    box-shadow: 0 0 8px rgba(251,146,60,0.9);
+  }
+  .heat-dot-spicy {
+    background: #ec4899;
+    box-shadow: 0 0 8px rgba(236,72,153,0.9);
+  }
+
+  /* ── Females audio waveform ── */
+  @keyframes waveBar {
+    from { transform: scaleY(0.4); opacity: 0.4; }
+    to   { transform: scaleY(1);   opacity: 0.85; }
+  }
+
+  /* ── Reduced-motion: kill ALL decorative animations ── */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
     }
   }
 }

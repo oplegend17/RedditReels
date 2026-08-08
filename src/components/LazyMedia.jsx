@@ -116,15 +116,16 @@ export function LazyVideo({ src, poster, className, isPlaying, onToggleLike, isL
           {/* Overlay Gradient */}
           <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity duration-300 pointer-events-none" />
 
-          {/* Heat Badge */}
+          {/* Heat dot — subtle, not text labels */}
           {heat && (
-            <div className={`absolute top-3 left-3 z-20 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider text-white shadow-lg ${
-              heat === 'nuclear' ? 'badge-nuclear' :
-              heat === 'fire'    ? 'badge-fire' :
-                                   'badge-spicy'
-            }`}>
-              {heat === 'nuclear' ? '☢️ NUCLEAR' : heat === 'fire' ? '🔥 FIRE' : '🌶️ SPICY'}
-            </div>
+            <div
+              className={`absolute top-3 left-3 z-20 w-2 h-2 rounded-full ${
+                heat === 'nuclear' ? 'heat-dot-nuclear' :
+                heat === 'fire'    ? 'heat-dot-fire' :
+                                     'heat-dot-spicy'
+              }`}
+              title={heat}
+            />
           )}
 
           {/* Actions */}

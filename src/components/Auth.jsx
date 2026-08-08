@@ -72,9 +72,9 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Background Ambience */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[800px] bg-neon-pink/20 rounded-full blur-[120px] opacity-30 animate-pulse"></div>
-      <div className="absolute bottom-0 right-0 w-[600px] h-[600px] bg-neon-blue/10 rounded-full blur-[100px] opacity-20"></div>
+      {/* Background — static, no pulse */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-neon-pink/15 rounded-full blur-[100px] opacity-100 pointer-events-none" />
+      <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-neon-blue/8 rounded-full blur-[80px] opacity-100 pointer-events-none" />
 
       <div className="w-full max-w-md p-8 md:p-10 glass-panel rounded-3xl relative z-10 animate-in fade-in zoom-in-95 duration-500">
         <div className="text-center mb-10">
@@ -115,21 +115,23 @@ export default function Auth() {
 
             <div className="group relative">
               <label className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1.5 ml-1">Password</label>
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full px-5 py-4 bg-black/40 border border-white/10 rounded-xl text-white placeholder-neutral-600 focus:outline-none focus:border-neon-blue focus:ring-1 focus:ring-neon-blue/50 transition-all duration-300"
-                placeholder="••••••••"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-[38px] text-neutral-500 hover:text-white text-sm font-medium transition-colors"
-              >
-                {showPassword ? 'Hide' : 'Show'}
-              </button>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="w-full px-5 py-4 pr-20 bg-black/40 border border-white/10 rounded-xl text-white placeholder-neutral-600 focus:outline-none focus:border-neon-blue focus:ring-1 focus:ring-neon-blue/50 transition-all duration-200"
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-white text-xs font-bold uppercase tracking-wider transition-colors px-1 py-1"
+                >
+                  {showPassword ? 'Hide' : 'Show'}
+                </button>
+              </div>
             </div>
           </div>
 

@@ -67,7 +67,7 @@ function achievementEmoji(iconName) {
   return map[iconName] || '🏅';
 }
 
-const TABS = ['Overview', 'Achievements', 'Favorites', 'Downloads', 'Subreddits', 'Settings'];
+const TABS = ['Overview', 'Achievements', 'Favorites', 'Subreddits', 'Settings'];
 
 export default function UserProfile({ user }) {
   const { profile, isAdmin } = useOutletContext();
@@ -201,7 +201,7 @@ export default function UserProfile({ user }) {
             <div className="mt-3 max-w-xs mx-auto sm:mx-0">
               <div className="flex justify-between text-xs text-white/40 mb-1">
                 <span>Level {level}</span>
-                <span>{xp.toLocaleString()} XP</span>
+                <span>{xp.toLocaleString()} XP · {Math.round(levelProgress)}% to {level + 1}</span>
               </div>
               <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
                 <div
@@ -209,7 +209,6 @@ export default function UserProfile({ user }) {
                   style={{ width: `${levelProgress}%` }}
                 />
               </div>
-              <p className="text-[10px] text-white/30 mt-1">Level {level + 1} →</p>
             </div>
           </div>
 
@@ -238,13 +237,13 @@ export default function UserProfile({ user }) {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 bg-white/5 p-1 rounded-2xl border border-white/10 mb-6 overflow-x-auto no-scrollbar">
+      {/* Tabs — icon + label on mobile, label only on sm+ */}
+      <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10 mb-6 overflow-x-auto no-scrollbar gap-0.5">
         {TABS.map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-bold whitespace-nowrap transition-all duration-200 ${
+            className={`flex-1 py-2 px-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all duration-200 min-w-[60px] ${
               activeTab === tab
                 ? 'bg-white text-black shadow'
                 : 'text-white/40 hover:text-white'
@@ -473,10 +472,19 @@ export default function UserProfile({ user }) {
             <button
               type="submit"
               disabled={updating}
-              className="w-full py-3 bg-neon-pink hover:bg-red-600 text-white rounded-xl font-bold transition-all duration-300 disabled:opacity-50 shadow-lg shadow-neon-pink/20"
+              className="w-full py-3 bg-neon-pink hover:bg-red-600 text-white rounded-xl font-bold transition-all duration-200 disabled:opacity-50 shadow-lg shadow-neon-pink/20"
             >
-              {updating ? 'Saving...' : updateMsg || 'Save Changes'}
+              {updating ? 'Saving…' : 'Save Changes'}
             </button>
+
+            {/* Inline status row */}
+            {updateMsg && (
+              <p className={`text-sm text-center font-medium ${
+                updateMsg.startsWith('Error') ? 'text-red-400' : 'text-green-400'
+              }`}>
+                {updateMsg}
+              </p>
+            )}
 
             {/* Developer Section */}
             <div className="pt-5 border-t border-white/10 space-y-3">

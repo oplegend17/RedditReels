@@ -271,21 +271,21 @@ export default function Females() {
 
       {/* Mood selector */}
       {!restrictionActive && (
-        <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar mb-8">
+        <div className="flex gap-2 overflow-x-auto pb-3 no-scrollbar mb-6">
           {MOODS.map(mood => (
             <button
               key={mood.id}
               onClick={() => setActiveMood(mood)}
-              className={`flex flex-col items-start gap-1 px-5 py-3.5 rounded-2xl border whitespace-nowrap transition-all duration-300 shrink-0 ${
+              className={`flex flex-col items-start gap-0.5 px-4 py-3 rounded-2xl border whitespace-nowrap transition-all duration-200 shrink-0 ${
                 activeMood.id === mood.id
-                  ? `bg-gradient-to-br ${mood.color} ${mood.border} scale-105`
-                  : 'bg-white/5 border-white/10 hover:bg-white/10'
+                  ? `bg-gradient-to-br ${mood.color} ${mood.border} scale-[1.03]`
+                  : 'bg-white/4 border-white/8 hover:bg-white/8'
               }`}
-              style={activeMood.id === mood.id ? { boxShadow: `0 0 20px ${mood.glow}` } : {}}
+              style={activeMood.id === mood.id ? { boxShadow: `0 0 18px ${mood.glow}` } : {}}
             >
-              <span className="text-xl">{mood.icon}</span>
-              <span className="text-sm font-bold text-white">{mood.label}</span>
-              <span className="text-[10px] text-white/40 max-w-[120px] leading-tight">{mood.desc}</span>
+              <span className="text-lg leading-none">{mood.icon}</span>
+              <span className="text-sm font-bold text-white mt-0.5">{mood.label}</span>
+              <span className="text-[10px] text-white/35 hidden sm:block max-w-[110px] leading-tight">{mood.desc}</span>
             </button>
           ))}
         </div>
@@ -495,13 +495,16 @@ function AudioModal({ post, onClose }) {
           <button onClick={onClose} className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white text-lg transition-colors shrink-0">×</button>
         </div>
 
-        {/* Waveform placeholder */}
-        <div className="flex items-center gap-1 justify-center h-12 mb-5 px-4">
-          {Array.from({ length: 40 }).map((_, i) => (
+        {/* Animated waveform — purely decorative */}
+        <div className="flex items-center gap-px justify-center h-10 mb-5 px-4">
+          {Array.from({ length: 36 }).map((_, i) => (
             <div
               key={i}
-              className="w-1 rounded-full bg-green-500/40"
-              style={{ height: `${20 + Math.sin(i * 0.8) * 15 + Math.random() * 10}px` }}
+              className="w-1 rounded-full bg-green-500/50 origin-center"
+              style={{
+                height: `${12 + Math.abs(Math.sin(i * 0.45)) * 20}px`,
+                animation: `waveBar 1.4s ease-in-out ${(i * 0.04).toFixed(2)}s infinite alternate`,
+              }}
             />
           ))}
         </div>
