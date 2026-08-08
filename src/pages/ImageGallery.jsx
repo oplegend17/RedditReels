@@ -150,7 +150,7 @@ export default function ImageGallery() {
     }
   };
 
-  const breakpointColumns = { default: 4, 1440: 3, 1100: 2, 700: 1 };
+  const breakpointColumns = { default: 4, 1440: 3, 1100: 2, 900: 2, 700: 1 };
 
   return (
     <>

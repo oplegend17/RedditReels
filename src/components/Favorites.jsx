@@ -10,7 +10,7 @@ export default function Favorites() {
   const [videoSizes, setVideoSizes] = useState({});
   const [fetchingSizes, setFetchingSizes] = useState(false);
 
-  const breakpointColumns = { default: 4, 1440: 3, 1100: 2, 700: 1 };
+  const breakpointColumns = { default: 4, 1440: 3, 1100: 2, 900: 2, 700: 1 };
 
   const handleVideoMouseEnter = (videoId) => {
     setPlayingVideos(prev => new Set([...prev, videoId]));
@@ -67,13 +67,14 @@ export default function Favorites() {
 
   if (favorites.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-32 text-center animate-in fade-in duration-500">
-        <div className="w-32 h-32 bg-white/5 rounded-full flex items-center justify-center mb-8 border border-white/10 shadow-[0_0_30px_rgba(0,0,0,0.5)]">
-          <svg className="w-12 h-12 text-neutral-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
-        </div>
-        <h2 className="text-3xl font-bold text-white mb-4">No Favorites Yet</h2>
-        <p className="text-neutral-400 max-w-md text-lg">
-          Start exploring and heart the videos you love to build your collection.
+      <div className="flex flex-col items-center justify-center py-32 text-center">
+        <svg className="w-12 h-12 text-white/15 mb-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5"
+            d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+        </svg>
+        <h2 className="text-2xl font-bold text-white mb-2">No saved videos yet</h2>
+        <p className="text-white/35 text-sm max-w-xs">
+          Heart any video to save it here for later.
         </p>
       </div>
     );
@@ -81,20 +82,20 @@ export default function Favorites() {
 
   return (
     <div className="animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row items-center justify-between mb-10 gap-6">
-        <h2 className="text-4xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-white via-neon-blue to-neon-pink drop-shadow-lg">
-          YOUR COLLECTION
-        </h2>
-        
-        <label className="flex items-center gap-3 bg-black/40 backdrop-blur-md px-5 py-2.5 rounded-full border border-white/10 cursor-pointer hover:bg-white/5 transition-colors">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-white">Your Collection</h2>
+          <p className="text-white/35 text-sm mt-0.5">{favorites.length} saved</p>
+        </div>
+        <label className="flex items-center gap-2.5 bg-white/5 px-4 py-2.5 rounded-full border border-white/10 cursor-pointer hover:bg-white/8 transition-colors text-sm font-medium text-white/70 hover:text-white">
           <input
             type="checkbox"
             checked={showUnder10MB}
             onChange={e => setShowUnder10MB(e.target.checked)}
             className="accent-neon-pink w-4 h-4"
           />
-          <span className="text-sm font-bold text-white">Under 10MB</span>
-          {fetchingSizes && <span className="text-xs text-neon-pink animate-pulse ml-2">Checking...</span>}
+          Under 10 MB
+          {fetchingSizes && <span className="text-xs text-neon-pink/70 animate-pulse">checking…</span>}
         </label>
       </div>
       
