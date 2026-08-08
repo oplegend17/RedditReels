@@ -378,15 +378,15 @@ export default function VideoGallery() {
   return (
     <>
       {restrictionActive && (
-        <div className="w-full p-4 md:p-5 bg-purple-500/10 border border-purple-500/25 rounded-2xl flex items-center justify-between mb-6 animate-pulse">
+        <div className="w-full p-4 md:p-5 bg-neon-pink/10 border border-neon-pink/30 rounded-2xl flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <span className="text-xl">🔒</span>
             <div>
-              <p className="text-xs font-black uppercase text-purple-400 tracking-wider">Restricted Feed Guard Active</p>
-              <p className="text-sm font-semibold text-white/80">Showing exclusive results matching <span className="font-mono text-purple-300">"{restrictionKeyword}"</span></p>
+              <p className="text-xs font-black uppercase text-neon-pink tracking-wider">Restricted Feed Guard Active</p>
+              <p className="text-sm font-semibold text-white/80">Showing exclusive results matching <span className="font-mono text-neon-pink/90">"{restrictionKeyword}"</span></p>
             </div>
           </div>
-          <span className="text-xs text-purple-400/50 font-mono hidden sm:inline">Feed Filtered & Secure</span>
+          <span className="text-xs text-neon-pink/60 font-mono hidden sm:inline">Feed Filtered & Secure</span>
         </div>
       )}
 
@@ -431,13 +431,13 @@ export default function VideoGallery() {
           </div>
         )}
 
-        {/* Browse / search bar — wraps on mobile */}
-        <div className="flex flex-wrap items-center gap-2 bg-black/70 backdrop-blur-xl p-2 rounded-2xl border border-white/10 shadow-2xl mx-auto w-full md:w-fit">
+        {/* Browse / search bar — cohesive control strip */}
+        <div className="glass-panel p-2 rounded-2xl flex flex-wrap items-center gap-2 w-full md:w-fit mx-auto">
           {/* Browse */}
           {!restrictionActive && (
             <button
               onClick={() => setShowBrowser(true)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white text-sm font-bold transition-colors border border-white/10"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 hover:text-white text-xs font-bold transition-all border border-white/10"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
@@ -447,9 +447,9 @@ export default function VideoGallery() {
           )}
 
           {/* AI search */}
-          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all duration-300 flex-1 min-w-0 ${
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all duration-300 flex-1 min-w-[160px] ${
             selectedMood?.id === 'ai'
-              ? 'bg-purple-500/20 border-purple-500/60'
+              ? 'bg-neon-blue/10 border-neon-blue/40'
               : 'bg-white/5 border-white/10'
           }`}>
             <span className="text-sm shrink-0">✨</span>
@@ -468,7 +468,7 @@ export default function VideoGallery() {
                   }
                 }
               }}
-              className="bg-transparent text-white text-sm placeholder-white/30 outline-none min-w-0 flex-1"
+              className="bg-transparent text-white text-xs font-medium placeholder-white/30 outline-none min-w-0 flex-1"
             />
             <button
               onClick={() => {
@@ -480,19 +480,19 @@ export default function VideoGallery() {
                 }
               }}
               disabled={aiLoading || !aiVibe.trim()}
-              className="text-purple-400 hover:text-purple-300 disabled:opacity-30 transition-colors shrink-0"
+              className="text-neon-blue hover:text-white disabled:opacity-30 transition-colors shrink-0"
             >
               {aiLoading
-                ? <span className="w-3.5 h-3.5 border-2 border-purple-400 border-t-transparent rounded-full animate-spin inline-block" />
+                ? <span className="w-3.5 h-3.5 border-2 border-neon-blue border-t-transparent rounded-full animate-spin inline-block" />
                 : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
               }
             </button>
           </div>
 
-          {/* Active sub + star */}
+          {/* Active sub + star chip */}
           {!restrictionActive && (selectedSubreddit || usingCustomSubreddit) && (
-            <div className="flex items-center gap-1.5 px-2 py-1.5">
-              <span className="text-white font-bold text-xs truncate max-w-[80px] md:max-w-none">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold">
+              <span className="text-white truncate max-w-[100px] md:max-w-xs" title={usingCustomSubreddit && customSubreddit ? `r/${customSubreddit}` : `r/${selectedSubreddit}`}>
                 {usingCustomSubreddit && customSubreddit ? `r/${customSubreddit}` : `r/${selectedSubreddit}`}
               </span>
               <button
@@ -512,13 +512,13 @@ export default function VideoGallery() {
 
           {/* Custom r/ input */}
           {!restrictionActive && (
-            <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-xl px-2">
+            <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-xl px-2.5 py-1">
               <input
                 type="text"
                 placeholder="r/..."
                 value={customSubreddit}
                 onChange={(e) => setCustomSubreddit(e.target.value)}
-                className="bg-transparent text-white py-2 outline-none w-16 md:w-24 text-sm placeholder-white/30"
+                className="bg-transparent text-white py-1 outline-none w-16 md:w-24 text-xs font-medium placeholder-white/30"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && customSubreddit.trim()) {
                     setUsingCustomSubreddit(true);
@@ -535,7 +535,7 @@ export default function VideoGallery() {
                     fetchVideos(true);
                   }
                 }}
-                className="bg-neon-pink/80 hover:bg-neon-pink px-2.5 py-1 rounded-lg text-xs font-bold transition-colors text-white"
+                className="bg-neon-pink hover:bg-neon-pink/80 px-2 py-0.5 rounded-lg text-[10px] font-black transition-all text-white shadow-[0_0_10px_rgba(255,47,86,0.3)]"
               >
                 GO
               </button>
@@ -546,9 +546,9 @@ export default function VideoGallery() {
           <button
             onClick={() => setDiscordMode(d => !d)}
             title="Under 10MB only"
-            className={`flex items-center gap-1 px-2.5 py-2 rounded-xl text-xs font-bold transition-all border ${
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border ${
               discordMode
-                ? 'bg-indigo-500/20 border-indigo-500/60 text-indigo-300'
+                ? 'bg-neon-blue/15 border-neon-blue/40 text-neon-blue shadow-[0_0_10px_rgba(0,243,255,0.2)]'
                 : 'bg-white/5 border-white/10 text-white/40 hover:text-white'
             }`}
           >
@@ -563,7 +563,7 @@ export default function VideoGallery() {
             <button
               onClick={() => setShowDownloadAll(true)}
               title="Download all videos from this subreddit"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-neon-pink/15 hover:bg-neon-pink/25 border border-neon-pink/30 hover:border-neon-pink/50 text-neon-pink hover:text-red-300 text-xs font-bold transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-neon-pink/15 hover:bg-neon-pink/25 border border-neon-pink/30 hover:border-neon-pink/50 text-neon-pink text-xs font-bold transition-all cursor-pointer shadow-[0_0_10px_rgba(255,47,86,0.2)] hover:scale-105"
             >
               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />

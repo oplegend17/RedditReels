@@ -118,15 +118,17 @@ export function LazyVideo({ src, poster, className, isPlaying, onToggleLike, isL
 
           {/* Heat Badge */}
           {heat && (
-            <div className={`absolute top-3 left-3 z-20 w-2 h-2 rounded-full shadow-lg ${
-              heat === 'nuclear' ? 'bg-red-500 shadow-red-500/80' :
-              heat === 'fire'    ? 'bg-orange-400 shadow-orange-400/80' :
-                                   'bg-pink-500 shadow-pink-500/80'
-            }`} title={heat} />
+            <div className={`absolute top-3 left-3 z-20 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider text-white shadow-lg ${
+              heat === 'nuclear' ? 'badge-nuclear' :
+              heat === 'fire'    ? 'badge-fire' :
+                                   'badge-spicy'
+            }`}>
+              {heat === 'nuclear' ? '☢️ NUCLEAR' : heat === 'fire' ? '🔥 FIRE' : '🌶️ SPICY'}
+            </div>
           )}
 
           {/* Actions */}
-          <div className="absolute top-3 right-3 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
+          <div className="absolute top-3 right-3 z-20 flex gap-2 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-0 sm:translate-y-2 group-hover:translate-y-0">
             <button 
               className={`relative w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md border transition-all duration-300 overflow-hidden ${isLiked ? 'bg-neon-pink/20 border-neon-pink text-neon-pink' : 'bg-black/50 border-white/10 text-white hover:bg-white/20'} ${isSplashing ? 'liquid-active' : ''}`}
               onClick={handleLike}

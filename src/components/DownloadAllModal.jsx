@@ -351,6 +351,26 @@ export default function DownloadAllModal({ subreddit, onClose }) {
               </p>
             </div>
 
+            {/* Visual Progress Bar */}
+            <div className="w-full max-w-xs mx-auto space-y-1">
+              <div className="h-2 w-full bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-neon-pink to-neon-blue transition-all duration-300 rounded-full"
+                  style={{
+                    width: videosCount > 0 
+                      ? `${Math.min(100, Math.round((currentVideoIndex / videosCount) * 100))}%` 
+                      : status === 'scanning' ? '30%' : '0%'
+                  }}
+                />
+              </div>
+              {videosCount > 0 && (
+                <div className="flex justify-between text-[10px] text-white/40 font-mono">
+                  <span>{Math.round((currentVideoIndex / videosCount) * 100)}%</span>
+                  <span>{currentVideoIndex} / {videosCount}</span>
+                </div>
+              )}
+            </div>
+
             {/* Bytes Counter */}
             <div className="bg-white/5 border border-white/10 rounded-2xl py-4 px-6 max-w-xs mx-auto">
               <span className="text-[10px] font-black text-white/40 uppercase tracking-wider block mb-1">
