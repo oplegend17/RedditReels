@@ -5,6 +5,7 @@ import { useFavorites } from '../lib/useFavorites';
 import { useHistory } from '../lib/useHistory';
 import { getIcon } from './GamificationIcons';
 import { getRedgifsId } from '../lib/media-utils';
+import { useWatchPartyContext } from '../context/WatchPartyContext';
 
 const BACKEND_API_URL = import.meta.env.VITE_BACKEND_API_URL;
 
@@ -13,10 +14,14 @@ export default function Reels({ subreddits = [] }) {
   const restrictionActive = profile?.restrictionType === 'keyword' && profile?.restrictionKeyword;
   const restrictionKeyword = profile?.restrictionKeyword || '';
 
+  const partyContext = useWatchPartyContext();
+  const { isHost, status, syncVideo } = partyContext || {};
+
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeVideoId, setActiveVideoId] = useState(null);
+
   const [isMuted, setIsMuted] = useState(() => {
     return localStorage.getItem('reels-muted') !== 'false';
   });
@@ -134,9 +139,13 @@ export default function Reels({ subreddits = [] }) {
             const videoObj = videos.find(v => v.id === id);
             if (videoObj) {
               markAsSeen(videoObj);
+              if (isHost && status === 'hosting' && syncVideo) {
+                syncVideo(videoObj);
+              }
             } else {
               markAsSeen(id);
             }
+
           }
         });
       },

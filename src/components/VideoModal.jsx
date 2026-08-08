@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import Hls from 'hls.js';
 import { getRedditHlsUrl, isRedditUrl, getRedgifsId } from '../lib/media-utils';
 import WatchParty from './WatchParty';
+import { useWatchPartyContext } from '../context/WatchPartyContext';
 
 const BACKEND = import.meta.env.VITE_BACKEND_API_URL;
 
-export default function VideoModal({ video, onClose, isRedgifs, originalUrl }) {
+export default function VideoModal({ video, onClose, isRedgifs, originalUrl, isGuestMirror = false }) {
   const videoRef = useRef(null);
   const hlsRef   = useRef(null);
   const [src, setSrc]         = useState(video.url);
@@ -15,7 +16,26 @@ export default function VideoModal({ video, onClose, isRedgifs, originalUrl }) {
   const [showParty, setShowParty] = useState(false);
   const navigate = useNavigate();
 
+  const partyContext = useWatchPartyContext();
+  const { isHost, status, syncVideo, videoRef: sharedVideoRef, createRoom } = partyContext || {};
+
+  // Host: automatically sync video with room on mount and clear on unmount
+  useEffect(() => {
+    if (isHost && status === 'hosting' && syncVideo && video) {
+      syncVideo(video);
+      return () => {
+        syncVideo(null);
+      };
+    }
+  }, [isHost, status, video, syncVideo]);
+
+  const setVideoRefNode = (node) => {
+    videoRef.current = node;
+    if (sharedVideoRef) sharedVideoRef.current = node;
+  };
+
   const shareUrl = `${window.location.origin}/watch/${video.subreddit}/${video.id}`;
+
 
   const copyLink = async (e) => {
     if (e) {
@@ -159,7 +179,7 @@ export default function VideoModal({ video, onClose, isRedgifs, originalUrl }) {
         {/* Video — full width on mobile, auto on desktop */}
         <div className="relative w-full sm:w-auto bg-black shrink-0">
           <video
-            ref={videoRef}
+            ref={setVideoRefNode}
             poster={video.thumbnail}
             controls
             loop
@@ -190,9 +210,16 @@ export default function VideoModal({ video, onClose, isRedgifs, originalUrl }) {
 
         {/* Info panel */}
         <div className="flex flex-col gap-4 p-5 sm:py-6 sm:pr-6 sm:pl-0 sm:w-72 shrink-0">
-          <p className="text-[11px] font-bold text-white/30 uppercase tracking-wider">
-            r/{video.subreddit}
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-bold text-white/30 uppercase tracking-wider">
+              r/{video.subreddit}
+            </p>
+            {isGuestMirror && (
+              <span className="px-2 py-0.5 rounded-full bg-neon-pink/20 border border-neon-pink/40 text-[10px] font-bold text-neon-pink animate-pulse">
+                Live Party Sync
+              </span>
+            )}
+          </div>
           <h2 className="text-base font-bold text-white leading-snug line-clamp-4 flex-1">
             {video.title}
           </h2>
@@ -224,17 +251,24 @@ export default function VideoModal({ video, onClose, isRedgifs, originalUrl }) {
           </button>
 
           {/* Watch Party */}
-          <button
-            onClick={() => setShowParty(true)}
-            className="flex items-center justify-center gap-2 py-2.5 px-5 rounded-xl
-              bg-neon-pink/8 hover:bg-neon-pink/15 border border-neon-pink/25 hover:border-neon-pink/50
-              text-neon-pink font-bold text-sm transition-all duration-200 active:scale-95">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round"
-                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            Watch Party
-          </button>
+          {!isGuestMirror && (
+            <button
+              onClick={() => {
+                if (status === 'hosting') return;
+                if (createRoom) createRoom(video);
+                else setShowParty(true);
+              }}
+              className={`flex items-center justify-center gap-2 py-2.5 px-5 rounded-xl font-bold text-sm transition-all duration-200 active:scale-95
+                ${status === 'hosting'
+                  ? 'bg-neon-pink text-white shadow-[0_0_16px_rgba(255,47,86,0.5)] cursor-default'
+                  : 'bg-neon-pink/8 hover:bg-neon-pink/15 border border-neon-pink/25 hover:border-neon-pink/50 text-neon-pink'}`}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round"
+                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              {status === 'hosting' ? 'Broadcasting Live 🔴' : 'Watch Party'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -244,3 +278,4 @@ export default function VideoModal({ video, onClose, isRedgifs, originalUrl }) {
     </div>
   );
 }
+

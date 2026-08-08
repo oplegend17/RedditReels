@@ -3,6 +3,7 @@ import { Link, useLocation, Outlet } from 'react-router-dom';
 import { auth } from '../lib/firebase';
 import { useWatchPartyContext } from '../context/WatchPartyContext';
 import { PartyBar } from './WatchParty';
+import VideoModal from './VideoModal';
 
 /* ── Icons — each path is unique ── */
 const Icons = {
@@ -87,7 +88,7 @@ export default function Layout({ profile, isAdmin }) {
   const location = useLocation();
 
   const party = useWatchPartyContext();
-  const { status, roomId, isHost, members, leaveRoom, joinRoom, createRoom, showJoinModal, setShowJoinModal } = party;
+  const { status, roomId, isHost, members, partyVideo, leaveRoom, joinRoom, createRoom, showJoinModal, setShowJoinModal } = party;
 
   useEffect(() => {
     const onScroll = () => {
@@ -159,6 +160,18 @@ export default function Layout({ profile, isAdmin }) {
           onLeave={leaveRoom}
         />
       )}
+
+      {/* ── Guest Media Mirror Overlay ── */}
+      {!isHost && status === 'joined' && partyVideo && (partyVideo.url || partyVideo.id) && (
+        <VideoModal
+          video={partyVideo}
+          isGuestMirror={true}
+          isRedgifs={partyVideo.isRedgifs || (partyVideo.url && partyVideo.url.includes('redgifs.com'))}
+          originalUrl={partyVideo.originalUrl || partyVideo.url}
+          onClose={() => {}}
+        />
+      )}
+
 
       {/* ── Join Party Modal ── */}
       {showJoinModal && (
