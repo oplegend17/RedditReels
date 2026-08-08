@@ -14,6 +14,7 @@ import Favorites from './components/Favorites';
 import UserProfile from './components/UserProfile';
 import Females from './pages/Females';
 import Admin from './pages/Admin';
+import Watch from './pages/Watch';
 
 
 function App() {
@@ -112,6 +113,8 @@ function App() {
           <Route path="favorites" element={<Favorites />} />
           <Route path="profile" element={<UserProfile user={user} />} />
           <Route path="admin" element={<Admin />} />
+          <Route path="watch/:subreddit/:id" element={<Watch />} />
+          <Route path="party/:roomId" element={<Watch />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
