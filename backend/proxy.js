@@ -9,7 +9,15 @@ import ffmpegPath from "ffmpeg-static";
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
-dotenv.config();
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load env from both backend directory and root directory
+dotenv.config({ path: path.join(__dirname, ".env") });
+dotenv.config({ path: path.join(__dirname, "../.env") });
 
 const app = express();
 app.use(express.json());
@@ -17,7 +25,6 @@ const PORT = process.env.PORT || 3001;
 
 // Init Cerebras if API key exists
 const cerebras = process.env.CEREBRAS_API_KEY ? new Cerebras({ apiKey: process.env.CEREBRAS_API_KEY }) : null;
-
 
 // Flatten all known subreddits for prompt context + validation
 const ALL_KNOWN_SUBS = [...new Set(Object.values(SUBREDDIT_CATEGORIES).flat())];
@@ -63,37 +70,51 @@ async function getRedditAccessToken() {
   if (redditAccessToken && Date.now() < tokenExpiry) {
     return redditAccessToken;
   }
-  const basicAuth = Buffer.from(
-    `${process.env.REDDIT_CLIENT_ID}:${process.env.REDDIT_CLIENT_SECRET}`
-  ).toString("base64");
-  const response = await fetch("https://www.reddit.com/api/v1/access_token", {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${basicAuth}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-      "User-Agent": process.env.REDDIT_USER_AGENT,
-    },
-    body: "grant_type=client_credentials",
-  });
-  if (!response.ok) {
-    throw new Error(
-      `Failed to get Reddit token: ${response.status} ${response.statusText}`
-    );
+  const clientId = process.env.REDDIT_CLIENT_ID;
+  const clientSecret = process.env.REDDIT_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    return null;
   }
-  const data = await response.json();
-  redditAccessToken = data.access_token;
-  tokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
-  return redditAccessToken;
+  try {
+    const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+    const response = await fetch("https://www.reddit.com/api/v1/access_token", {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${basicAuth}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": process.env.REDDIT_USER_AGENT || browserUA,
+      },
+      body: "grant_type=client_credentials",
+    });
+    if (!response.ok) {
+      return null;
+    }
+    const data = await response.json();
+    redditAccessToken = data.access_token;
+    tokenExpiry = Date.now() + (data.expires_in - 60) * 1000;
+    return redditAccessToken;
+  } catch (e) {
+    console.warn("⚠️ Reddit OAuth token request error:", e.message);
+    return null;
+  }
 }
 
 function buildHeaders(token) {
+  if (token) {
+    return {
+      Authorization: `Bearer ${token}`,
+      "User-Agent": process.env.REDDIT_USER_AGENT || browserUA,
+      Accept: "application/json",
+      "Accept-Language": "en-US,en;q=0.9",
+    };
+  }
   return {
-    Authorization: `Bearer ${token}`,
-    "User-Agent": process.env.REDDIT_USER_AGENT,
+    "User-Agent": browserUA,
     Accept: "application/json",
     "Accept-Language": "en-US,en;q=0.9",
   };
 }
+
 
 // Parse allowed origins from env and trim
 const allowedOrigins = process.env.FRONTEND_URL
@@ -201,18 +222,23 @@ Return ONLY valid JSON. No explanation, no markdown.`,
   }
 });
 
-// Default subreddit route (uses OAuth)
+// Default subreddit route (uses OAuth with public fallback)
 app.get("/api/reddit", async (req, res) => {
   try {
     const token = await getRedditAccessToken();
     const defaultSubreddit = DEFAULT_SUBREDDITS[0];
-    const url = `https://oauth.reddit.com/r/${defaultSubreddit}/hot.json?limit=${
-      process.env.ITEMS_PER_PAGE || 30
-    }`;
-    console.log(`🔎 Fetching default subreddit with OAuth: ${url}`);
-    const response = await fetch(url, {
-      headers: buildHeaders(token),
-    });
+    let url = token
+      ? `https://oauth.reddit.com/r/${defaultSubreddit}/hot.json?limit=${process.env.ITEMS_PER_PAGE || 30}&raw_json=1`
+      : `https://www.reddit.com/r/${defaultSubreddit}/hot.json?limit=${process.env.ITEMS_PER_PAGE || 30}&raw_json=1`;
+
+    console.log(`🔎 Fetching default subreddit (${token ? "OAuth" : "Public"}): ${url}`);
+    let response = await fetch(url, { headers: buildHeaders(token) });
+
+    if (!response.ok && token) {
+      url = `https://www.reddit.com/r/${defaultSubreddit}/hot.json?limit=${process.env.ITEMS_PER_PAGE || 30}&raw_json=1`;
+      response = await fetch(url, { headers: buildHeaders(null) });
+    }
+
     if (!response.ok) {
       throw new Error(`Reddit API returned ${response.status} ${response.statusText}`);
     }
@@ -224,7 +250,7 @@ app.get("/api/reddit", async (req, res) => {
   }
 });
 
-// Specific subreddit route (uses OAuth)
+// Specific subreddit route (uses OAuth with public fallback)
 app.get("/api/reddit/:subreddit", async (req, res) => {
   try {
     const token = await getRedditAccessToken();
@@ -233,15 +259,25 @@ app.get("/api/reddit/:subreddit", async (req, res) => {
     const t = req.query.t || "all";
     const after = req.query.after || "";
     const limit = 50;
-    let url = `https://oauth.reddit.com/r/${subreddit}/${sort}.json?limit=${limit}&raw_json=1`;
-    if (sort === "top" && t) {
-      url += `&t=${t}`;
+
+    let url = token
+      ? `https://oauth.reddit.com/r/${subreddit}/${sort}.json?limit=${limit}&raw_json=1`
+      : `https://www.reddit.com/r/${subreddit}/${sort}.json?limit=${limit}&raw_json=1`;
+
+    if (sort === "top" && t) url += `&t=${t}`;
+    if (after) url += `&after=${after}`;
+
+    console.log(`🔎 Fetching subreddit (${token ? "OAuth" : "Public"}): ${url}`);
+    let response = await fetch(url, { headers: buildHeaders(token) });
+
+    // Fallback to public endpoint if OAuth failed
+    if (!response.ok && token) {
+      console.warn(`⚠️ OAuth request for r/${subreddit} returned ${response.status}. Retrying via public endpoint...`);
+      url = `https://www.reddit.com/r/${subreddit}/${sort}.json?limit=${limit}&raw_json=1` +
+        (sort === "top" && t ? `&t=${t}` : "") +
+        (after ? `&after=${after}` : "");
+      response = await fetch(url, { headers: buildHeaders(null) });
     }
-    if (after) {
-      url += `&after=${after}`;
-    }
-    console.log(`🔎 Fetching subreddit with OAuth: ${url}`);
-    const response = await fetch(url, { headers: buildHeaders(token) });
 
     if (!response.ok) {
       const status = response.status;
@@ -262,11 +298,11 @@ app.get("/api/reddit/:subreddit", async (req, res) => {
 
     res.json(data);
   } catch (err) {
-    console.error(`❌ Error fetching subreddit: ${req.params.subreddit}`);
-    console.error(err);
+    console.error(`❌ Error fetching subreddit: ${req.params.subreddit}`, err);
     res.status(500).json({ error: err.toString() });
   }
 });
+
 
 // Random reels endpoint
 app.get("/api/reels/random", async (req, res) => {
