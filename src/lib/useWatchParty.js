@@ -91,6 +91,31 @@ export function useWatchParty(videoRef) {
     setStatus('idle');
   }, [roomId, isHost, user]);
 
+  /* ── Host: sync current route ── */
+  const syncRoute = useCallback(async (route) => {
+    if (!isHost || !roomId) return;
+    try {
+      await set(ref(rtdb, `rooms/${roomId}/currentRoute`), route);
+    } catch (e) {
+      console.error('Error syncing route:', e);
+    }
+  }, [isHost, roomId]);
+
+  /* ── Host: sync active video ── */
+  const syncVideo = useCallback(async (video) => {
+    if (!isHost || !roomId) return;
+    try {
+      await set(ref(rtdb, `rooms/${roomId}/partyVideo`), video);
+      if (video) {
+        await set(ref(rtdb, `rooms/${roomId}/videoId`), video.id || video.name || '');
+        await set(ref(rtdb, `rooms/${roomId}/url`), video.url || '');
+        await set(ref(rtdb, `rooms/${roomId}/title`), video.title || '');
+      }
+    } catch (e) {
+      console.error('Error syncing video:', e);
+    }
+  }, [isHost, roomId]);
+
   /* ── Host: push playback state every 2s ── */
   useEffect(() => {
     if (!isHost || !roomId || !videoRef?.current) return;
@@ -105,7 +130,9 @@ export function useWatchParty(videoRef) {
     return () => clearInterval(syncIntervalRef.current);
   }, [isHost, roomId, videoRef]);
 
-  /* ── Guest: listen to room state and sync video ── */
+  /* ── Guest: listen to room state and sync video / route ── */
+  const [currentRoute, setCurrentRoute] = useState(null);
+
   useEffect(() => {
     if (!roomId || isHost) return;
 
@@ -118,21 +145,26 @@ export function useWatchParty(videoRef) {
         return;
       }
 
-      setPartyVideo({
+      if (data.currentRoute && data.currentRoute !== currentRoute) {
+        setCurrentRoute(data.currentRoute);
+      }
+
+      const activeMedia = data.partyVideo || {
         id: data.videoId,
         subreddit: data.subreddit,
         url: data.url,
         title: data.title,
         thumbnail: data.thumbnail,
-      });
+      };
 
+      setPartyVideo(activeMedia);
       setMembers(data.members || {});
 
       const vid = videoRef?.current;
       if (!vid) return;
 
       // Sync time if more than threshold off
-      if (Math.abs(vid.currentTime - data.currentTime) > SYNC_THRESHOLD_S) {
+      if (typeof data.currentTime === 'number' && Math.abs(vid.currentTime - data.currentTime) > SYNC_THRESHOLD_S) {
         vid.currentTime = data.currentTime;
       }
 
@@ -144,7 +176,7 @@ export function useWatchParty(videoRef) {
     });
 
     return () => unsub();
-  }, [roomId, isHost, videoRef, leaveRoom]);
+  }, [roomId, isHost, videoRef, leaveRoom, currentRoute]);
 
   /* ── Host: subscribe to member list ── */
   useEffect(() => {
@@ -164,10 +196,14 @@ export function useWatchParty(videoRef) {
     isHost,
     status,
     partyVideo,
+    currentRoute,
     members: memberList,
     memberCount,
     createRoom,
     joinRoom,
     leaveRoom,
+    syncRoute,
+    syncVideo,
   };
 }
+

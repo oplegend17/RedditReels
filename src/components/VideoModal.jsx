@@ -17,11 +17,35 @@ export default function VideoModal({ video, onClose, isRedgifs, originalUrl }) {
 
   const shareUrl = `${window.location.origin}/watch/${video.subreddit}/${video.id}`;
 
-  const copyLink = async () => {
-    await navigator.clipboard.writeText(shareUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const copyLink = async (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(shareUrl);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = shareUrl;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        textArea.remove();
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.warn("Copy fallback handled:", err);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
+
 
   /* ── Escape key ── */
   useEffect(() => {

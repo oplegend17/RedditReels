@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, Outlet } from 'react-router-dom';
 import { auth } from '../lib/firebase';
+import { useWatchPartyContext } from '../context/WatchPartyContext';
+import { PartyBar } from './WatchParty';
 
 /* ── Icons — each path is unique ── */
 const Icons = {
@@ -77,8 +79,15 @@ const MOBILE_TABS = ['/', '/reels', '/females', '/favorites', '/profile'];
 export default function Layout({ profile, isAdmin }) {
   const [showNav, setShowNav] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [joinInputCode, setJoinInputCode] = useState('');
+  const [joinErr, setJoinErr] = useState('');
+  const [isJoining, setIsJoining] = useState(false);
+
   const lastScrollY = useRef(0);
   const location = useLocation();
+
+  const party = useWatchPartyContext();
+  const { status, roomId, isHost, members, leaveRoom, joinRoom, createRoom, showJoinModal, setShowJoinModal } = party;
 
   useEffect(() => {
     const onScroll = () => {
@@ -115,8 +124,79 @@ export default function Layout({ profile, isAdmin }) {
   const tabItems  = allItems.filter(n => MOBILE_TABS.includes(n.path));
   const moreItems = allItems.filter(n => !MOBILE_TABS.includes(n.path));
 
+  const handleJoinSubmit = async (e) => {
+    e.preventDefault();
+    const code = joinInputCode.trim().toUpperCase();
+    if (code.length !== 6) {
+      setJoinErr('Room code must be 6 characters');
+      return;
+    }
+    setIsJoining(true);
+    setJoinErr('');
+    const ok = await joinRoom(code);
+    setIsJoining(false);
+    if (ok) {
+      setShowJoinModal(false);
+      setJoinInputCode('');
+    } else {
+      setJoinErr('Room not found or host disconnected');
+    }
+  };
+
+  const handleCreateHostParty = async () => {
+    await createRoom({ id: 'home', title: 'Reddit Reels Party', subreddit: 'all', url: '' });
+  };
+
   return (
     <div className="min-h-screen text-white">
+
+      {/* ── Active Watch Party status bar ── */}
+      {status !== 'idle' && (
+        <PartyBar
+          roomId={roomId}
+          isHost={isHost}
+          members={members}
+          onLeave={leaveRoom}
+        />
+      )}
+
+      {/* ── Join Party Modal ── */}
+      {showJoinModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+          onClick={() => setShowJoinModal(false)}>
+          <div className="w-full max-w-sm bg-[#121212] border border-white/10 rounded-3xl p-6 shadow-2xl animate-in zoom-in-95 duration-200"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h3 className="text-xl font-black text-white">Join Watch Party</h3>
+                <p className="text-xs text-white/50 mt-0.5">Enter the 6-character room code</p>
+              </div>
+              <button onClick={() => setShowJoinModal(false)}
+                className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white">
+                ✕
+              </button>
+            </div>
+            <form onSubmit={handleJoinSubmit} className="space-y-4">
+              <input
+                type="text"
+                value={joinInputCode}
+                onChange={e => { setJoinInputCode(e.target.value.toUpperCase()); setJoinErr(''); }}
+                maxLength={6}
+                placeholder="ABC123"
+                className="w-full px-4 py-3 bg-white/5 border border-white/15 rounded-xl text-white text-center font-mono text-2xl tracking-[0.3em] uppercase focus:outline-none focus:border-neon-pink"
+                autoFocus
+              />
+              {joinErr && <p className="text-xs text-red-400 text-center font-medium">{joinErr}</p>}
+              <button
+                type="submit"
+                disabled={isJoining || joinInputCode.trim().length !== 6}
+                className="w-full py-3.5 bg-neon-pink hover:bg-red-600 text-white font-bold rounded-xl shadow-lg transition-all disabled:opacity-40">
+                {isJoining ? 'Joining Party...' : 'Join Party'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ── Desktop / tablet header ── */}
       <header className={`fixed top-0 inset-x-0 z-50 glass-panel border-b-0 rounded-none
@@ -149,16 +229,42 @@ export default function Layout({ profile, isAdmin }) {
             })}
           </nav>
 
-          <button
-            className="hidden md:flex items-center gap-2 px-4 py-2 rounded-full border border-white/15
-              text-white/70 text-sm font-medium hover:bg-white/8 hover:text-white transition-all shrink-0"
-            onClick={() => auth.signOut()}>
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-            Sign out
-          </button>
+          {/* Watch party header controls */}
+          <div className="hidden md:flex items-center gap-2">
+            {status === 'idle' ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleCreateHostParty}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-neon-pink/15 border border-neon-pink/30 hover:bg-neon-pink text-white text-xs font-bold transition-all shadow-[0_0_12px_rgba(255,47,86,0.25)] cursor-pointer">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+                  </svg>
+                  Host Party
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowJoinModal(true)}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/15 hover:bg-white/15 text-white text-xs font-bold transition-all cursor-pointer">
+                  <svg className="w-3.5 h-3.5 text-neon-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  Join Party
+                </button>
+              </>
+            ) : null}
+
+            <button
+              className="flex items-center gap-2 px-4 py-2 rounded-full border border-white/15
+                text-white/70 text-sm font-medium hover:bg-white/8 hover:text-white transition-all shrink-0"
+              onClick={() => auth.signOut()}>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
+                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Sign out
+            </button>
+          </div>
 
           {/* Mobile: current route label */}
           <span className="md:hidden text-sm font-bold text-white/50">
@@ -166,6 +272,7 @@ export default function Layout({ profile, isAdmin }) {
           </span>
         </div>
       </header>
+
 
       {/* ── Page content ── */}
       <main className="max-w-[1800px] mx-auto px-3 md:px-8 pt-16 md:pt-20 pb-24 md:pb-10">

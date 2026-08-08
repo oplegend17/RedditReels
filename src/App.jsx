@@ -17,6 +17,8 @@ import Admin from './pages/Admin';
 import Watch from './pages/Watch';
 
 
+import { WatchPartyProvider } from './context/WatchPartyContext';
+
 function App() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -101,25 +103,28 @@ function App() {
 
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Layout profile={profile} isAdmin={isAdmin} />}>
-          <Route index element={<VideoGallery />} />
-          <Route path="images" element={<ImageGallery />} />
-          <Route path="reels" element={<Reels />} />
-          <Route path="females" element={<Females />} />
-          <Route path="challenges" element={<ChallengeMode />} />
-          <Route path="challenges/:challengeId" element={<ChallengeMode />} />
-          <Route path="stats" element={<Stats />} />
-          <Route path="favorites" element={<Favorites />} />
-          <Route path="profile" element={<UserProfile user={user} />} />
-          <Route path="admin" element={<Admin />} />
-          <Route path="watch/:subreddit/:id" element={<Watch />} />
-          <Route path="party/:roomId" element={<Watch />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Route>
-      </Routes>
+      <WatchPartyProvider>
+        <Routes>
+          <Route path="/" element={<Layout profile={profile} isAdmin={isAdmin} />}>
+            <Route index element={<VideoGallery />} />
+            <Route path="images" element={<ImageGallery />} />
+            <Route path="reels" element={<Reels />} />
+            <Route path="females" element={<Females />} />
+            <Route path="challenges" element={<ChallengeMode />} />
+            <Route path="challenges/:challengeId" element={<ChallengeMode />} />
+            <Route path="stats" element={<Stats />} />
+            <Route path="favorites" element={<Favorites />} />
+            <Route path="profile" element={<UserProfile user={user} />} />
+            <Route path="admin" element={<Admin />} />
+            <Route path="watch/:subreddit/:id" element={<Watch />} />
+            <Route path="party/:roomId" element={<Watch />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Routes>
+      </WatchPartyProvider>
     </BrowserRouter>
   );
 }
 
 export default App;
+

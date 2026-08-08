@@ -56,24 +56,43 @@ function JoinForm({ onJoin, onClose }) {
 }
 
 /* ─── Active party bar (shown during session) ─── */
-function PartyBar({ roomId, isHost, members, onLeave }) {
+export function PartyBar({ roomId, isHost, members, onLeave }) {
   const [copied, setCopied] = useState(false);
 
-  const copyLink = async () => {
-    const url = `${window.location.origin}/party/${roomId}`;
-    await navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const safeCopy = async (e, text) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        textArea.remove();
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.warn("Copy fallback handled:", err);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
-  const copyCode = async () => {
-    await navigator.clipboard.writeText(roomId);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+  const copyLink = (e) => safeCopy(e, `${window.location.origin}/party/${roomId}`);
+  const copyCode = (e) => safeCopy(e, roomId);
 
   return (
-    <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3
+    <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[90] flex items-center gap-3
       px-4 py-2.5 bg-black/90 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl
       animate-in slide-in-from-top-2 duration-300">
 
@@ -84,7 +103,7 @@ function PartyBar({ roomId, isHost, members, onLeave }) {
       </span>
 
       <span className="text-sm font-bold text-white">
-        {isHost ? 'Hosting' : 'Watching'} with {members.length} {members.length === 1 ? 'person' : 'people'}
+        {isHost ? 'Hosting Party' : 'Synced with Host'} ({members.length} {members.length === 1 ? 'user' : 'users'})
       </span>
 
       {/* Avatars */}
@@ -107,25 +126,26 @@ function PartyBar({ roomId, isHost, members, onLeave }) {
       <div className="h-4 w-px bg-white/15" />
 
       {/* Code chip */}
-      <button onClick={copyCode}
-        className="font-mono text-xs font-bold text-white/70 hover:text-white transition-colors tracking-widest">
+      <button onClick={copyCode} type="button"
+        className="font-mono text-xs font-bold text-white/70 hover:text-white transition-colors tracking-widest"
+        title="Click to copy code">
         {roomId}
       </button>
 
       {/* Share link */}
-      <button onClick={copyLink}
-        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/8 hover:bg-white/15
-          text-xs font-bold text-white transition-all">
-        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <button onClick={copyLink} type="button"
+        className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 hover:bg-white/20
+          text-xs font-bold text-white transition-all cursor-pointer">
+        <svg className="w-3.5 h-3.5 text-neon-pink" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
             d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
         </svg>
-        {copied ? 'Copied!' : 'Invite'}
+        {copied ? 'Copied Link!' : 'Invite'}
       </button>
 
       {/* Leave */}
-      <button onClick={onLeave}
-        className="text-white/30 hover:text-red-400 transition-colors"
+      <button onClick={onLeave} type="button"
+        className="text-white/40 hover:text-red-400 transition-colors p-1"
         title={isHost ? 'End party' : 'Leave party'}>
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
@@ -135,6 +155,7 @@ function PartyBar({ roomId, isHost, members, onLeave }) {
     </div>
   );
 }
+
 
 /* ─── Guest player — mirrors host's video ─── */
 function GuestPlayer({ video, videoRef }) {

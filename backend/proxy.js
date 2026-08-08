@@ -15,8 +15,9 @@ const app = express();
 app.use(express.json());
 const PORT = process.env.PORT || 3001;
 
-// Init Cerebras once and reuse
-const cerebras = new Cerebras({ apiKey: process.env.CEREBRAS_API_KEY });
+// Init Cerebras if API key exists
+const cerebras = process.env.CEREBRAS_API_KEY ? new Cerebras({ apiKey: process.env.CEREBRAS_API_KEY }) : null;
+
 
 // Flatten all known subreddits for prompt context + validation
 const ALL_KNOWN_SUBS = [...new Set(Object.values(SUBREDDIT_CATEGORIES).flat())];
@@ -564,6 +565,57 @@ app.get('/api/merge-video', async (req, res) => {
     }
   }
 });
+
+// Endpoint: Fetch RedGifs media direct video stream URL
+app.get("/api/redgifs/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ error: "Missing RedGifs ID" });
+
+    const cleanId = id.toLowerCase();
+    let token = await getRedgifsAccessToken();
+
+    let response = await fetch(`https://api.redgifs.com/v2/gifs/${cleanId}`, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        'User-Agent': browserUA,
+        Accept: 'application/json',
+      },
+    });
+
+    if (response.status === 401 || response.status === 403) {
+      // Refresh token & retry once
+      redgifsAccessToken = null;
+      token = await getRedgifsAccessToken();
+      response = await fetch(`https://api.redgifs.com/v2/gifs/${cleanId}`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'User-Agent': browserUA,
+          Accept: 'application/json',
+        },
+      });
+    }
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: `RedGifs API returned ${response.status}` });
+    }
+
+    const data = await response.json();
+    const gifUrls = data?.gif?.urls || {};
+    const videoUrl = gifUrls.hd || gifUrls.sd || gifUrls.gif || gifUrls.vposter;
+
+    if (!videoUrl) {
+      return res.status(404).json({ error: "No video URL found for RedGifs item" });
+    }
+
+    res.json({ success: true, url: videoUrl, gif: data.gif });
+  } catch (err) {
+    console.error("❌ RedGifs Proxy Endpoint Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 
 app.listen(PORT, () => {
   console.log(`✅ Proxy server running at http://localhost:${PORT}`);
