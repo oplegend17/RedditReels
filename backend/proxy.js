@@ -304,7 +304,44 @@ app.get("/api/reddit/:subreddit", async (req, res) => {
 });
 
 
+// Single post route (uses OAuth with public fallback)
+app.get("/api/post/:subreddit/:id", async (req, res) => {
+  try {
+    const { subreddit, id } = req.params;
+    const token = await getRedditAccessToken();
+
+    let url = token
+      ? `https://oauth.reddit.com/r/${subreddit}/comments/${id}.json?raw_json=1`
+      : `https://www.reddit.com/r/${subreddit}/comments/${id}.json?raw_json=1`;
+
+    console.log(`🔎 Fetching single post (${token ? "OAuth" : "Public"}): ${url}`);
+    let response = await fetch(url, { headers: buildHeaders(token) });
+
+    if (!response.ok && token) {
+      url = `https://www.reddit.com/r/${subreddit}/comments/${id}.json?raw_json=1`;
+      response = await fetch(url, { headers: buildHeaders(null) });
+    }
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: "Post not found" });
+    }
+
+    const data = await response.json();
+    const post = data?.[0]?.data?.children?.[0]?.data;
+
+    if (!post) {
+      return res.status(404).json({ error: "Post data missing" });
+    }
+
+    res.json({ post });
+  } catch (err) {
+    console.error(`❌ Error fetching post ${req.params.id}:`, err);
+    res.status(500).json({ error: err.toString() });
+  }
+});
+
 // Random reels endpoint
+
 app.get("/api/reels/random", async (req, res) => {
   try {
     const defaultSubs = DEFAULT_SUBREDDITS;

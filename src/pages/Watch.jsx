@@ -30,34 +30,62 @@ export default function Watch() {
       return;
     }
 
-    fetch(`${BACKEND}/api/reddit/${subreddit}`)
-      .then(r => r.json())
-      .then(data => {
-        const post = (data?.data?.children || [])
-          .map(c => c.data)
-          .find(p => p?.id === id);
-        if (!post) throw new Error('Video not found');
+    setLoading(true);
+    setError(null);
 
-        const url =
-          post.media?.reddit_video?.fallback_url ||
-          post.preview?.reddit_video_preview?.fallback_url ||
-          post.url_overridden_by_dest ||
-          '';
+    const parsePost = (post) => {
+      const url =
+        post.media?.reddit_video?.fallback_url ||
+        post.preview?.reddit_video_preview?.fallback_url ||
+        post.url_overridden_by_dest ||
+        post.url ||
+        '';
 
-        setVideo({
-          id: post.id,
-          title: post.title,
-          url,
-          thumbnail: post.preview?.images?.[0]?.source?.url?.replace(/&amp;/g, '&') || '',
-          subreddit: post.subreddit,
-          isRedgifs: (post.url_overridden_by_dest || '').includes('redgifs.com'),
-          originalUrl: post.url_overridden_by_dest,
-        });
-        setSrc(url);
+      return {
+        id: post.id,
+        title: post.title,
+        url,
+        thumbnail: post.preview?.images?.[0]?.source?.url?.replace(/&amp;/g, '&') || '',
+        subreddit: post.subreddit,
+        isRedgifs: (post.url_overridden_by_dest || post.url || '').includes('redgifs.com'),
+        originalUrl: post.url_overridden_by_dest || post.url,
+      };
+    };
+
+    // 1. Try single post API route first
+    fetch(`${BACKEND}/api/post/${subreddit}/${id}`)
+      .then(r => {
+        if (!r.ok) throw new Error('Post endpoint error');
+        return r.json();
+      })
+      .then(d => {
+        if (d?.post) {
+          const parsed = parsePost(d.post);
+          setVideo(parsed);
+          setSrc(parsed.url);
+        } else {
+          throw new Error('Post not found');
+        }
+      })
+      .catch(() => {
+        // 2. Fallback to searching subreddit listing feed
+        return fetch(`${BACKEND}/api/reddit/${subreddit}`)
+          .then(r => r.json())
+          .then(data => {
+            const post = (data?.data?.children || [])
+              .map(c => c.data)
+              .find(p => p?.id === id);
+            if (!post) throw new Error('Video not found');
+
+            const parsed = parsePost(post);
+            setVideo(parsed);
+            setSrc(parsed.url);
+          });
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, [subreddit, id]);
+
 
   /* ── Resolve redgifs ── */
   useEffect(() => {
