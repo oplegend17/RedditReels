@@ -164,6 +164,7 @@ export default function Layout({ profile, isAdmin }) {
       {/* ── Guest Media Mirror Overlay ── */}
       {!isHost && status === 'joined' && partyVideo && (partyVideo.url || partyVideo.id) && (
         <VideoModal
+          key={partyVideo.id || partyVideo.url}
           video={partyVideo}
           isGuestMirror={true}
           isRedgifs={partyVideo.isRedgifs || (partyVideo.url && partyVideo.url.includes('redgifs.com'))}
@@ -171,6 +172,7 @@ export default function Layout({ profile, isAdmin }) {
           onClose={() => {}}
         />
       )}
+
 
 
       {/* ── Join Party Modal ── */}

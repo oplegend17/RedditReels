@@ -80,52 +80,73 @@ export default function VideoModal({ video, onClose, isRedgifs, originalUrl, isG
 
   /* ── Resolve src (redgifs proxy) ── */
   useEffect(() => {
-    if (isRedgifs && originalUrl) {
-      const id = getRedgifsId(originalUrl);
-      if (id) {
-        fetch(`${BACKEND}/api/redgifs/${id}`)
+    let cancelled = false;
+    const isRedgifMedia = isRedgifs || (video?.url && video.url.includes('redgifs.com'));
+    const targetUrl = originalUrl || video?.originalUrl || video?.url;
+
+    if (isRedgifMedia && targetUrl) {
+      const rid = getRedgifsId(targetUrl);
+      if (rid) {
+        fetch(`${BACKEND}/api/redgifs/${rid}`)
           .then(r => r.json())
-          .then(d => { if (d.url) setSrc(d.url); })
-          .catch(() => {});
-        return;
+          .then(d => { if (d.url && !cancelled) setSrc(d.url); })
+          .catch(() => { if (!cancelled) setSrc(video.url); });
+        return () => { cancelled = true; };
       }
     }
-    setSrc(video.url);
-  }, [video.url, isRedgifs, originalUrl]);
+    setSrc(video?.url || '');
+    return () => { cancelled = true; };
+  }, [video?.id, video?.url, isRedgifs, originalUrl]);
 
-  /* ── HLS attach ── */
+  /* ── HLS attach & video reload ── */
   useEffect(() => {
-    if (!videoRef.current || !src) return;
-    if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
+    const vid = videoRef.current;
+    if (!vid || !src) return;
+
+    if (hlsRef.current) {
+      hlsRef.current.destroy();
+      hlsRef.current = null;
+    }
+
+    vid.pause();
 
     const hlsSrc = isRedditUrl(src) ? getRedditHlsUrl(src) : src;
     if (hlsSrc?.includes('.m3u8')) {
       if (Hls.isSupported()) {
         const hls = new Hls();
         hls.loadSource(hlsSrc);
-        hls.attachMedia(videoRef.current);
+        hls.attachMedia(vid);
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
-          videoRef.current?.play().catch(() => {
+          vid.play().catch(() => {
             setMuted(true);
-            videoRef.current.muted = true;
-            videoRef.current?.play().catch(() => {});
+            vid.muted = true;
+            vid.play().catch(() => {});
           });
         });
         hlsRef.current = hls;
-      } else if (videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
-        videoRef.current.src = hlsSrc;
+      } else if (vid.canPlayType('application/vnd.apple.mpegurl')) {
+        vid.src = hlsSrc;
+        vid.load();
+        vid.play().catch(() => {});
       }
     } else {
-      videoRef.current.src = src;
-      videoRef.current?.play().catch(() => {
+      vid.src = src;
+      vid.load();
+      vid.play().catch(() => {
         setMuted(true);
-        videoRef.current.muted = true;
-        videoRef.current?.play().catch(() => {});
+        vid.muted = true;
+        vid.play().catch(() => {});
       });
     }
 
-    return () => { if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; } };
+    return () => {
+      if (hlsRef.current) {
+        hlsRef.current.destroy();
+        hlsRef.current = null;
+      }
+    };
   }, [src]);
+
 
   /* ── Mute sync ── */
   useEffect(() => {

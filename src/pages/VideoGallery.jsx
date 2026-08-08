@@ -666,7 +666,8 @@ export default function VideoGallery() {
         {isLoading && <div className="w-8 h-8 border-4 border-neon-pink border-t-transparent rounded-full animate-spin"></div>}
       </div>
 
-      {selectedVideo && <VideoModal video={selectedVideo} isRedgifs={selectedVideo.isRedgifs} originalUrl={selectedVideo.originalUrl} onClose={() => setSelectedVideo(null)} />}
+      {selectedVideo && <VideoModal key={selectedVideo.id || selectedVideo.url} video={selectedVideo} isRedgifs={selectedVideo.isRedgifs} originalUrl={selectedVideo.originalUrl} onClose={() => setSelectedVideo(null)} />}
+
       {showDownloadAll && <DownloadAllModal subreddit={getActiveSubredditString()} onClose={() => setShowDownloadAll(false)} />}
     </>
   );
