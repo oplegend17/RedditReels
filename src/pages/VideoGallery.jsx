@@ -79,15 +79,25 @@ export default function VideoGallery() {
     // RedGIFs API Provider Branch (Primary)
     if (sourceProvider === 'redgifs') {
       const pageToFetch = isNewSubreddit ? 1 : redgifsPage;
-      const isSearch = isSearchMode || restrictionActive;
-      const effectiveQuery = restrictionActive
-        ? (searchQuery.trim() ? `${searchQuery.trim()} ${restrictionKeyword}` : restrictionKeyword)
-        : (searchQuery || 'hot');
+      const isSearch = isSearchMode || restrictionActive || !!selectedMood || usingCustomSubreddit || !!selectedSubreddit;
+
+      let effectiveQuery = 'hot';
+      if (restrictionActive) {
+        effectiveQuery = searchQuery.trim() ? `${searchQuery.trim()} ${restrictionKeyword}` : restrictionKeyword;
+      } else if (isSearchMode && searchQuery) {
+        effectiveQuery = searchQuery.trim();
+      } else if (selectedMood) {
+        effectiveQuery = selectedMood.id === 'soft' ? 'sensual' : (selectedMood.id === 'trending' ? 'hot' : selectedMood.id);
+      } else if (usingCustomSubreddit && customSubreddit) {
+        effectiveQuery = customSubreddit.trim().replace(/^r\//i, '');
+      } else if (selectedSubreddit) {
+        effectiveQuery = selectedSubreddit.replace(/^r\//i, '');
+      }
 
       try {
         setIsLoading(true);
         setError(null);
-        const endpoint = isSearch
+        const endpoint = (effectiveQuery && effectiveQuery !== 'trending')
           ? `${BACKEND_API_URL}/api/redgifs/search?query=${encodeURIComponent(effectiveQuery)}&order=${sortOrder}&page=${pageToFetch}`
           : `${BACKEND_API_URL}/api/redgifs/trending?order=${sortOrder}&page=${pageToFetch}`;
 

@@ -2,7 +2,6 @@ import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
 import dotenv from "dotenv";
-import Cerebras from "@cerebras/cerebras_cloud_sdk";
 import { DEFAULT_SUBREDDITS, SUBREDDIT_CATEGORIES } from "./subreddits.js";
 import ffmpeg from "fluent-ffmpeg";
 import ffmpegPath from "ffmpeg-static";
@@ -29,9 +28,6 @@ app.use((req, res, next) => {
   next();
 });
 const PORT = process.env.PORT || 3001;
-
-// Init Cerebras if API key exists
-const cerebras = process.env.CEREBRAS_API_KEY ? new Cerebras({ apiKey: process.env.CEREBRAS_API_KEY }) : null;
 
 // Flatten all known subreddits for prompt context + validation
 const ALL_KNOWN_SUBS = [...new Set(Object.values(SUBREDDIT_CATEGORIES).flat())];
@@ -155,7 +151,57 @@ app.get("/api/subreddits/categories", (req, res) => {
   res.json({ categories: SUBREDDIT_CATEGORIES });
 });
 
-// AI smart search endpoint — decides intent then acts
+// Round-Robin Groq API Keys Manager (dynamically split from comma-separated process.env.GROQ_API_KEYS)
+const rawGroqEnv = process.env.GROQ_API_KEYS || process.env.GROQ_API_KEY || "";
+const GROQ_API_KEYS = rawGroqEnv
+  .split(",")
+  .map(k => k.trim())
+  .filter(Boolean);
+
+let groqKeyIndex = 0;
+
+function getNextGroqKey() {
+  if (GROQ_API_KEYS.length === 0) return null;
+  const key = GROQ_API_KEYS[groqKeyIndex];
+  groqKeyIndex = (groqKeyIndex + 1) % GROQ_API_KEYS.length;
+  return key;
+}
+
+async function callGroqCompletion(messages, model = "llama-3.3-70b-versatile") {
+  let attempts = 0;
+  while (attempts < GROQ_API_KEYS.length) {
+    const key = getNextGroqKey();
+    try {
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${key}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          temperature: 0.4,
+          max_tokens: 150,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content || "";
+        console.log(`⚡ [Groq API Key #${groqKeyIndex}] Success with model ${model}`);
+        return content;
+      }
+      console.warn(`⚠️ Groq API key (${key.slice(0, 15)}...) status ${response.status}`);
+    } catch (err) {
+      console.warn(`⚠️ Groq API key (${key.slice(0, 15)}...) failed:`, err.message);
+    }
+    attempts++;
+  }
+  throw new Error("All Groq API keys failed");
+}
+
+// AI smart search endpoint — decides intent then acts using Groq API round-robin
 app.post("/api/ai/mood", async (req, res) => {
   const vibe = (req.body?.vibe || "").trim().slice(0, 200);
   if (!vibe) return res.status(400).json({ error: "Missing vibe" });
@@ -165,21 +211,13 @@ app.post("/api/ai/mood", async (req, res) => {
     return res.json({ ...vibeCache.get(cacheKey), cached: true });
   }
 
-  if (!cerebras) {
-    return res.json({ intent: "search", query: vibe });
-  }
-
   const subList = ALL_KNOWN_SUBS.join(", ");
 
   try {
-    const response = await cerebras.chat.completions.create({
-      model: "llama-3.3-70b",
-      max_completion_tokens: 150,
-      temperature: 0.4,
-      messages: [
-        {
-          role: "system",
-          content: `You are a smart search router for an adult content platform.
+    const raw = await callGroqCompletion([
+      {
+        role: "system",
+        content: `You are a smart search router for an adult content platform.
 
 Given a user query, decide if it is:
 - "search": a specific keyword, name, pornstar, term, or short phrase the user wants to search for directly
@@ -189,20 +227,18 @@ If "search": return { "intent": "search", "query": "<the search term to use>" }
 If "mood": return { "intent": "mood", "subreddits": [5-8 names from this list: ${subList}] }
 
 Return ONLY valid JSON. No explanation, no markdown.`,
-        },
-        {
-          role: "user",
-          content: vibe,
-        },
-      ],
-    });
+      },
+      {
+        role: "user",
+        content: vibe,
+      },
+    ]);
 
-    const raw = response.choices[0]?.message?.content?.trim() || "{}";
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) throw new Error("No JSON in response");
 
     const parsed = JSON.parse(match[0]);
-    console.log(`✨ AI intent [${vibe}] →`, parsed);
+    console.log(`✨ AI Groq intent [${vibe}] →`, parsed);
 
     if (parsed.intent === "search" && parsed.query) {
       const result = { intent: "search", query: parsed.query };
@@ -225,7 +261,7 @@ Return ONLY valid JSON. No explanation, no markdown.`,
 
     return res.json({ intent: "search", query: vibe });
   } catch (err) {
-    console.warn("⚠️ AI smart search fallback to direct query:", err.message);
+    console.warn("⚠️ Groq AI smart search fallback to direct query:", err.message);
     return res.json({ intent: "search", query: vibe });
   }
 });
