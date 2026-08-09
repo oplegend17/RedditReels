@@ -167,7 +167,7 @@ function getNextGroqKey() {
   return key;
 }
 
-async function callGroqCompletion(messages, model = "llama-3.3-70b-versatile") {
+async function callGroqCompletion(messages, model = "openai/gpt-oss-120b") {
   let attempts = 0;
   while (attempts < GROQ_API_KEYS.length) {
     const key = getNextGroqKey();
