@@ -33,6 +33,8 @@ export default function Reels({ subreddits = [] }) {
   const { addFavorite, removeFavorite, isFavorite } = useFavorites();
   const { markAsSeen } = useHistory();
 
+  const [page, setPage] = useState(1);
+
   const fetchReels = useCallback(async (reset = false) => {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
@@ -41,65 +43,39 @@ export default function Reels({ subreddits = [] }) {
       if (reset) setLoading(true);
       else setLoadingMore(true);
 
-      let url;
+      const targetPage = reset ? 1 : page;
+      let url = `${BACKEND_API_URL}/api/redgifs/trending?page=${targetPage}&count=20`;
       if (restrictionActive) {
-        url = `${BACKEND_API_URL}/api/search?q=${encodeURIComponent(restrictionKeyword)}`;
-      } else {
-        url = `${BACKEND_API_URL}/api/reels/random`;
-        if (subreddits.length > 0) {
-          url += `?subreddits=${subreddits.join(',')}`;
-        }
+        url = `${BACKEND_API_URL}/api/redgifs/search?query=${encodeURIComponent(restrictionKeyword)}&page=${targetPage}`;
+      } else if (subreddits.length > 0) {
+        url = `${BACKEND_API_URL}/api/redgifs/search?query=${encodeURIComponent(subreddits[0])}&page=${targetPage}`;
       }
 
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+      const rawPosts = data.posts || [];
 
-      let parsedReels = [];
+      let parsedReels = rawPosts.map(p => ({
+        id: p.id,
+        title: p.title,
+        url: p.url,
+        thumbnail: p.thumbnail,
+        subreddit: p.subreddit,
+        originalUrl: p.permalink,
+        isRedgifs: true,
+      }));
 
       if (restrictionActive) {
-        // Parse search results for keyword restriction
-        parsedReels = (data?.data?.children || [])
-          .map(post => post?.data)
-          .filter(p => {
-            if (!p) return false;
-            const u = p.url_overridden_by_dest || p.url || '';
-            return (
-              (p.is_video && p.media?.reddit_video?.fallback_url) ||
-              p.preview?.reddit_video_preview?.fallback_url ||
-              u.includes('redgifs.com') ||
-              u.includes('v.redd.it')
-            );
-          })
-          .map(p => ({
-            id: p.id,
-            title: p.title,
-            url: p?.media?.reddit_video?.fallback_url || p?.preview?.reddit_video_preview?.fallback_url || '',
-            thumbnail: p?.preview?.images?.[0]?.source?.url?.replace(/&amp;/g, '&') || '',
-            subreddit: p.subreddit,
-            originalUrl: p.url_overridden_by_dest || p.url,
-            isRedgifs: (p.url_overridden_by_dest || p.url || '').includes('redgifs.com')
-          }))
-          .filter(p => p.url || p.isRedgifs);
-
-        // Strict keyword verification filter
         const kw = restrictionKeyword.toLowerCase().trim();
         parsedReels = parsedReels.filter(v => {
           const title = (v.title || '').toLowerCase();
           const sub = (v.subreddit || '').toLowerCase();
-          const url = (v.url || v.originalUrl || '').toLowerCase();
-          return title.includes(kw) || sub.includes(kw) || url.includes(kw);
+          return title.includes(kw) || sub.includes(kw);
         });
-
-        // Client-side shuffle for search reels to keep them dynamic
-        for (let i = parsedReels.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [parsedReels[i], parsedReels[j]] = [parsedReels[j], parsedReels[i]];
-        }
-      } else {
-        if (!data?.reels?.length) throw new Error('No reels returned');
-        parsedReels = data.reels.filter(v => v.id && (v.url || v.isRedgifs));
       }
+
+      setPage(data.nextPage || targetPage + 1);
 
       setVideos(prev => {
         if (reset) return parsedReels;
@@ -117,7 +93,7 @@ export default function Reels({ subreddits = [] }) {
       setLoadingMore(false);
       fetchingRef.current = false;
     }
-  }, [subreddits, restrictionActive, restrictionKeyword]);
+  }, [subreddits, restrictionActive, restrictionKeyword, page]);
 
   // Reset and fetch when subreddits change
   useEffect(() => {
@@ -185,11 +161,24 @@ export default function Reels({ subreddits = [] }) {
 
   const handleShare = async (e, video) => {
     e.stopPropagation();
+    const cleanSub = (video.subreddit || 'redgifs').replace('/', '_');
+    const shareUrl = `${window.location.origin}/watch/${cleanSub}/${video.id}`;
     try {
       if (navigator.share) {
-        await navigator.share({ title: video.title, url: video.url });
+        await navigator.share({ title: video.title, url: shareUrl });
+      } else if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(shareUrl);
       } else {
-        await navigator.clipboard.writeText(video.url);
+        const textArea = document.createElement("textarea");
+        textArea.value = shareUrl;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-999999px";
+        textArea.style.top = "-999999px";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        textArea.remove();
       }
     } catch {}
   };

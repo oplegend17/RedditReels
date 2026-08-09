@@ -95,6 +95,11 @@ export function PartyBar({ roomId, isHost, members, onLeave }) {
   const [copied, setCopied] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [inputText, setInputText] = useState('');
+  const [pos, setPos] = useState(null);
+
+  const isDraggingRef = useRef(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const elementPosRef = useRef({ x: 0, y: 0 });
   const chatBottomRef = useRef(null);
 
   const { messages, sendMessage, sendReaction } = useWatchPartyContext() || {};
@@ -104,6 +109,44 @@ export function PartyBar({ roomId, isHost, members, onLeave }) {
       chatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, chatOpen]);
+
+  const handleDragStart = (e) => {
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    
+    isDraggingRef.current = true;
+    dragStartRef.current = { x: clientX, y: clientY };
+
+    const currentX = pos?.x ?? (window.innerWidth / 2 - 180);
+    const currentY = pos?.y ?? 80;
+    elementPosRef.current = { x: currentX, y: currentY };
+
+    const handleMove = (moveEvt) => {
+      if (!isDraggingRef.current) return;
+      const moveX = moveEvt.touches ? moveEvt.touches[0].clientX : moveEvt.clientX;
+      const moveY = moveEvt.touches ? moveEvt.touches[0].clientY : moveEvt.clientY;
+      const deltaX = moveX - dragStartRef.current.x;
+      const deltaY = moveY - dragStartRef.current.y;
+
+      const newX = Math.max(10, Math.min(window.innerWidth - 300, elementPosRef.current.x + deltaX));
+      const newY = Math.max(10, Math.min(window.innerHeight - 100, elementPosRef.current.y + deltaY));
+
+      setPos({ x: newX, y: newY });
+    };
+
+    const handleEnd = () => {
+      isDraggingRef.current = false;
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleEnd);
+      window.removeEventListener('touchmove', handleMove);
+      window.removeEventListener('touchend', handleEnd);
+    };
+
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleEnd);
+    window.addEventListener('touchmove', handleMove);
+    window.addEventListener('touchend', handleEnd);
+  };
 
   const safeCopy = async (e, text) => {
     if (e) {
@@ -144,12 +187,28 @@ export function PartyBar({ roomId, isHost, members, onLeave }) {
     setInputText('');
   };
 
+  const containerStyle = pos
+    ? { position: 'fixed', left: `${pos.x}px`, top: `${pos.y}px`, transform: 'none' }
+    : { position: 'fixed', top: '80px', left: '50%', transform: 'translateX(-50%)' };
+
   return (
     <>
       <FloatingReactions />
 
-      <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[110] flex flex-col items-center gap-2">
-        <div className="flex items-center gap-2 md:gap-3 px-4 py-2 bg-black/90 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl animate-in slide-in-from-top-2 duration-300">
+      <div style={containerStyle} className="z-[110] flex flex-col items-center gap-2 select-none">
+        <div className="flex items-center gap-2 md:gap-3 px-3 py-2 bg-black/90 backdrop-blur-xl border border-white/10 rounded-full shadow-2xl animate-in slide-in-from-top-2 duration-300">
+
+          {/* Drag Handle */}
+          <div
+            onMouseDown={handleDragStart}
+            onTouchStart={handleDragStart}
+            className="cursor-grab active:cursor-grabbing text-white/40 hover:text-white transition-colors p-1 flex items-center select-none"
+            title="Click and drag to move bar"
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M9 5a2 2 0 100-4 2 2 0 000 4zm0 8a2 2 0 100-4 2 2 0 000 4zm0 8a2 2 0 100-4 2 2 0 000 4zm6-16a2 2 0 100-4 2 2 0 000 4zm0 8a2 2 0 100-4 2 2 0 000 4zm0 8a2 2 0 100-4 2 2 0 000 4z" />
+            </svg>
+          </div>
 
           {/* Pulse dot */}
           <span className="relative flex h-2.5 w-2.5 shrink-0">
@@ -158,7 +217,7 @@ export function PartyBar({ roomId, isHost, members, onLeave }) {
           </span>
 
           <span className="text-xs md:text-sm font-bold text-white whitespace-nowrap">
-            {isHost ? 'Hosting Party' : 'Synced with Host'} ({members.length})
+            {isHost ? 'Hosting' : 'Joined'} ({members.length})
           </span>
 
           {/* Avatars */}
@@ -206,7 +265,7 @@ export function PartyBar({ roomId, isHost, members, onLeave }) {
             }`}
           >
             💬 Chat
-            {messages.length > 0 && (
+            {messages?.length > 0 && (
               <span className="w-4 h-4 rounded-full bg-neon-blue text-black font-extrabold text-[9px] flex items-center justify-center">
                 {messages.length}
               </span>
@@ -256,10 +315,10 @@ export function PartyBar({ roomId, isHost, members, onLeave }) {
 
             {/* Messages Stream */}
             <div className="h-44 overflow-y-auto space-y-2 pr-1 text-xs">
-              {messages.length === 0 ? (
+              {messages?.length === 0 ? (
                 <p className="text-white/30 text-center py-8 italic">No messages yet. Say hello!</p>
               ) : (
-                messages.map((m, i) => (
+                messages?.map((m, i) => (
                   <div key={i} className="bg-white/5 rounded-xl p-2 border border-white/5">
                     <span className="font-bold text-neon-blue mr-1.5">{m.user}:</span>
                     <span className="text-white/90">{m.text}</span>
@@ -291,6 +350,7 @@ export function PartyBar({ roomId, isHost, members, onLeave }) {
     </>
   );
 }
+
 
 
 

@@ -106,84 +106,36 @@ export default function Females() {
   const [playingId, setPlayingId] = useState(null);
   const [selectedAudio, setSelectedAudio] = useState(null);
 
-  const fetchPosts = useCallback(async (mood, afterToken = null, reset = false) => {
+  const [page, setPage] = useState(1);
+
+  const fetchPosts = useCallback(async (mood, pageNum = 1, reset = false) => {
     setLoading(true);
     setError(null);
     try {
-      const sub = mood.subreddits.join('+');
-      
-      let url;
+      let url = `${BACKEND}/api/redgifs/females?mood=${encodeURIComponent(mood.id)}&page=${pageNum}`;
       if (restrictionActive) {
-        // Hijack default feed with global restricted search query
-        url = `${BACKEND}/api/search?q=${encodeURIComponent(restrictionKeyword + (mood.isAudio ? ' site:reddit.com self:yes' : ''))}${afterToken ? `&after=${afterToken}` : ''}`;
-      } else {
-        url = `${BACKEND}/api/reddit/${sub}${afterToken ? `?after=${afterToken}` : ''}`;
+        url = `${BACKEND}/api/redgifs/search?query=${encodeURIComponent(restrictionKeyword)}&page=${pageNum}`;
       }
 
       const res = await fetch(url);
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || 'Failed to load');
+        throw new Error(d.error || 'Failed to load RedGIFs');
       }
       const data = await res.json();
-      const children = data?.data?.children || [];
+      const rawPosts = data.posts || [];
 
-      let mapped;
-      if (mood.isAudio) {
-        // Audio posts: filter for self posts or links with audio
-        mapped = children
-          .map(c => c.data)
-          .filter(p => p && (p.is_self || p.url?.includes('reddit.com') || p.selftext))
-          .map(p => ({
-            id: p.id,
-            title: p.title,
-            author: p.author,
-            ups: p.ups,
-            url: p.url,
-            selftext: p.selftext,
-            subreddit: p.subreddit,
-            created: p.created_utc,
-            type: 'audio',
-            flair: p.link_flair_text,
-          }));
-      } else {
-        // Visual posts: images + videos
-        mapped = children
-          .map(c => c.data)
-          .filter(p => {
-            if (!p) return false;
-            const u = p.url_overridden_by_dest || p.url || '';
-            return (
-              (p.is_video && p.media?.reddit_video?.fallback_url) ||
-              p.preview?.reddit_video_preview?.fallback_url ||
-              p.post_hint === 'image' ||
-              /\.(jpg|jpeg|png|gif|webp)$/i.test(u) ||
-              u.includes('redgifs.com') ||
-              u.includes('i.redd.it')
-            );
-          })
-          .map(p => {
-            const u = p.url_overridden_by_dest || p.url || '';
-            const isVideo = !!(
-              (p.is_video && p.media?.reddit_video?.fallback_url) ||
-              p.preview?.reddit_video_preview?.fallback_url ||
-              u.includes('redgifs.com')
-            );
-            return {
-              id: p.id,
-              title: p.title,
-              author: p.author,
-              ups: p.ups,
-              url: isVideo
-                ? (p.media?.reddit_video?.fallback_url || p.preview?.reddit_video_preview?.fallback_url || u)
-                : (p.url_overridden_by_dest || p.url),
-              thumbnail: p.preview?.images?.[0]?.source?.url?.replace(/&amp;/g, '&') || '',
-              subreddit: p.subreddit,
-              type: isVideo ? 'video' : 'image',
-              isRedgifs: u.includes('redgifs.com'),
-            };
-          });
-      }
+      let mapped = rawPosts.map(p => ({
+        id: p.id,
+        title: p.title,
+        author: p.author,
+        ups: p.ups,
+        url: p.url,
+        thumbnail: p.thumbnail,
+        subreddit: p.subreddit,
+        type: 'video',
+        isRedgifs: true,
+      }));
 
       // Enforce strict client-side keyword restrict filter
       if (restrictionActive) {
@@ -191,18 +143,16 @@ export default function Females() {
         mapped = mapped.filter(p => {
           const title = (p.title || '').toLowerCase();
           const sub = (p.subreddit || '').toLowerCase();
-          const selfText = (p.selftext || '').toLowerCase();
-          const url = (p.url || '').toLowerCase();
-          return title.includes(kw) || sub.includes(kw) || selfText.includes(kw) || url.includes(kw);
+          const urlStr = (p.url || '').toLowerCase();
+          return title.includes(kw) || sub.includes(kw) || urlStr.includes(kw);
         });
       }
 
-      const newAfter = data?.data?.after;
-      setAfter(newAfter);
-      setHasMore(!!newAfter);
+      setHasMore(data.hasMore ?? false);
+      setPage(data.nextPage || pageNum + 1);
       setPosts(prev => reset ? mapped : [...prev, ...mapped]);
-    } catch (e) {
-      setError(e.message);
+    } catch (err) {
+      setError(err.message || 'Failed to load posts');
     } finally {
       setLoading(false);
     }

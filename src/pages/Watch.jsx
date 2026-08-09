@@ -33,6 +33,36 @@ export default function Watch() {
     setLoading(true);
     setError(null);
 
+    // If this is a RedGIFs item (id starts with rg_ or subreddit is redgifs / rg_)
+    if (id.startsWith('rg_') || subreddit === 'redgifs' || subreddit.startsWith('rg')) {
+      const cleanId = id.replace('rg_', '');
+      fetch(`${BACKEND}/api/redgifs/${cleanId}`)
+        .then(r => {
+          if (!r.ok) throw new Error('RedGIFs clip not found');
+          return r.json();
+        })
+        .then(d => {
+          if (d.url) {
+            const parsed = {
+              id,
+              title: d.gif?.tags?.length ? d.gif.tags.slice(0, 4).join(' • ') : (d.gif?.userName ? `Clip by ${d.gif.userName}` : `RedGIFs Clip #${cleanId}`),
+              url: d.url,
+              thumbnail: d.gif?.urls?.poster || d.gif?.urls?.thumbnail || d.url,
+              subreddit: d.gif?.userName ? `rg/${d.gif.userName}` : 'redgifs',
+              isRedgifs: true,
+              originalUrl: `https://www.redgifs.com/watch/${cleanId}`
+            };
+            setVideo(parsed);
+            setSrc(d.url);
+          } else {
+            throw new Error('RedGIFs video URL not found');
+          }
+        })
+        .catch(e => setError(e.message))
+        .finally(() => setLoading(false));
+      return;
+    }
+
     const parsePost = (post) => {
       const url =
         post.media?.reddit_video?.fallback_url ||

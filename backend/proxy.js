@@ -21,6 +21,13 @@ dotenv.config({ path: path.join(__dirname, "../.env") });
 
 const app = express();
 app.use(express.json());
+
+// Express Request Logger Middleware
+app.use((req, res, next) => {
+  const timestamp = new Date().toLocaleTimeString();
+  console.log(`📡 [${timestamp}] ${req.method} ${req.originalUrl}`);
+  next();
+});
 const PORT = process.env.PORT || 3001;
 
 // Init Cerebras if API key exists
@@ -46,12 +53,9 @@ async function getRedgifsAccessToken() {
   }
   try {
     const response = await fetch("https://api.redgifs.com/v2/auth/temporary", {
-      method: 'POST',
       headers: {
         'User-Agent': browserUA,
         'Accept': 'application/json',
-        'Referer': 'https://www.redgifs.com/',
-        'Origin': 'https://www.redgifs.com'
       }
     });
     if (!response.ok) throw new Error(`Auth failed with status: ${response.status}`);
@@ -161,11 +165,15 @@ app.post("/api/ai/mood", async (req, res) => {
     return res.json({ ...vibeCache.get(cacheKey), cached: true });
   }
 
+  if (!cerebras) {
+    return res.json({ intent: "search", query: vibe });
+  }
+
   const subList = ALL_KNOWN_SUBS.join(", ");
 
   try {
     const response = await cerebras.chat.completions.create({
-      model: "llama3.1-8b",
+      model: "llama-3.3-70b",
       max_completion_tokens: 150,
       temperature: 0.4,
       messages: [
@@ -174,7 +182,7 @@ app.post("/api/ai/mood", async (req, res) => {
           content: `You are a smart search router for an adult content platform.
 
 Given a user query, decide if it is:
-- "search": a specific keyword, name, pornstar, term, or short phrase the user wants to search Reddit for directly
+- "search": a specific keyword, name, pornstar, term, or short phrase the user wants to search for directly
 - "mood": a vibe, feeling, or descriptive natural language mood where you should pick matching subreddits
 
 If "search": return { "intent": "search", "query": "<the search term to use>" }
@@ -208,17 +216,17 @@ Return ONLY valid JSON. No explanation, no markdown.`,
         .filter((s) => typeof s === "string" && knownLower.has(s.toLowerCase()))
         .slice(0, 8);
 
-      if (validated.length === 0) throw new Error("No valid subreddits");
-      const result = { intent: "mood", subreddits: validated };
-      vibeCache.set(cacheKey, result);
-      return res.json(result);
+      if (validated.length > 0) {
+        const result = { intent: "mood", subreddits: validated };
+        vibeCache.set(cacheKey, result);
+        return res.json(result);
+      }
     }
 
-    throw new Error("Unexpected response shape");
+    return res.json({ intent: "search", query: vibe });
   } catch (err) {
-    console.error("❌ AI smart search error:", err.message);
-    const fallback = DEFAULT_SUBREDDITS.sort(() => 0.5 - Math.random()).slice(0, 6);
-    res.json({ intent: "mood", subreddits: fallback, fallback: true });
+    console.warn("⚠️ AI smart search fallback to direct query:", err.message);
+    return res.json({ intent: "search", query: vibe });
   }
 });
 
@@ -472,48 +480,7 @@ app.get("/api/search", async (req, res) => {
   }
 });
 
-// RedGifs metadata proxy
-app.get("/api/redgifs/:id", async (req, res) => {
-  const { id } = req.params;
-  try {
-    const token = await getRedgifsAccessToken();
-    if (!token) throw new Error('Unauthorized - RedGifs token missing');
-    
-    // Exact official URL pattern
-    const url = `https://api.redgifs.com/v2/gifs/${id}?views=yes&users=yes&niches=yes`;
-    
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'User-Agent': browserUA,
-        'Accept': 'application/json',
-        'Referer': 'https://www.redgifs.com/',
-        'Origin': 'https://www.redgifs.com'
-      },
-    });
 
-    if (!response.ok) {
-       console.log(`⚠️ RedGifs API Error: ${response.status} for ID: ${id}`);
-       throw new Error(`RedGifs API returned ${response.status}`);
-    }
-
-    const data = await response.json();
-    const gif = data.gif || data;
-    
-    if (!gif?.urls) {
-        console.error("Malformed RedGifs response:", JSON.stringify(data).slice(0, 200));
-        throw new Error('Invalid RedGifs metadata structure');
-    }
-
-    res.json({ 
-      url: gif.urls.hd || gif.urls.sd || gif.urls.hls || gif.urls.vtt,
-      poster: gif.urls.poster || gif.urls.thumbnail 
-    });
-  } catch (err) {
-    console.error(`❌ RedGifs Proxy Error: ${id} ->`, err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
 
 // Proxy image endpoint for direct Reddit image download
 app.get('/api/proxy-image', async (req, res) => {
@@ -639,6 +606,255 @@ app.get('/api/merge-video', async (req, res) => {
   }
 });
 
+function normalizeRedgifsItem(gif) {
+  const videoUrl = gif.urls?.hd || gif.urls?.sd || gif.urls?.vposter || gif.urls?.gif;
+  const posterUrl = gif.urls?.poster || gif.urls?.thumbnail;
+  const tagList = Array.isArray(gif.tags) ? gif.tags : [];
+  return {
+    id: `rg_${gif.id}`,
+    rawId: gif.id,
+    title: tagList.length > 0 ? tagList.slice(0, 4).join(" • ") : (gif.userName ? `Clip by ${gif.userName}` : `RedGIFs Clip #${gif.id}`),
+    url: videoUrl,
+    fallbackUrl: gif.urls?.sd || videoUrl,
+    thumbnail: posterUrl || videoUrl,
+    is_video: true,
+    domain: 'redgifs.com',
+    subreddit: gif.userName ? `rg/${gif.userName}` : 'redgifs',
+    author: gif.userName || 'redgifs',
+    permalink: `https://www.redgifs.com/watch/${gif.id}`,
+    source: 'redgifs',
+    created_utc: gif.createDate || Math.floor(Date.now() / 1000),
+    ups: gif.likes || gif.views || 0,
+    num_comments: 0,
+    tags: tagList,
+    duration: gif.duration || 0,
+  };
+}
+
+// Endpoint: Search or browse RedGifs media by tag/keyword/creator
+app.get("/api/redgifs/search", async (req, res) => {
+  try {
+    const { query = 'hot', count = '30', page = '1' } = req.query;
+    let token = await getRedgifsAccessToken();
+    const q = (query && query.trim()) ? query.trim() : 'hot';
+
+    console.log(`🎬 [RedGIFs API Search] Query: "${q}" | Page: ${page}`);
+
+    const authHeaders = {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      'User-Agent': browserUA,
+      Accept: 'application/json',
+    };
+
+    // 1. Try Tag Search (tags=q)
+    let searchUrl = `https://api.redgifs.com/v2/gifs/search?tags=${encodeURIComponent(q)}&count=${encodeURIComponent(count)}&page=${encodeURIComponent(page)}`;
+    let response = await fetch(searchUrl, { headers: authHeaders });
+
+    if (response.status === 401 || response.status === 403) {
+      redgifsAccessToken = null;
+      token = await getRedgifsAccessToken();
+      response = await fetch(searchUrl, {
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), 'User-Agent': browserUA, Accept: 'application/json' },
+      });
+    }
+
+    let data = response.ok ? await response.json() : {};
+    let rawGifs = data.gifs || [];
+
+    // 2. If tag search returned 0 items, check if q is a Creator / Username
+    if (rawGifs.length === 0) {
+      const userUrl = `https://api.redgifs.com/v2/users/${encodeURIComponent(q)}/search?count=${encodeURIComponent(count)}&page=${encodeURIComponent(page)}`;
+      const userRes = await fetch(userUrl, { headers: authHeaders });
+      if (userRes.ok) {
+        const userData = await userRes.json();
+        if (userData.gifs && userData.gifs.length > 0) {
+          data = userData;
+          rawGifs = userData.gifs;
+          console.log(`  👤 Matched Creator [${q}] -> ${rawGifs.length} clips`);
+        }
+      }
+    }
+
+    // 3. Fallback to generic search_text=q if still 0
+    if (rawGifs.length === 0) {
+      const fallbackUrl = `https://api.redgifs.com/v2/gifs/search?search_text=${encodeURIComponent(q)}&count=${encodeURIComponent(count)}&page=${encodeURIComponent(page)}`;
+      const fbRes = await fetch(fallbackUrl, { headers: authHeaders });
+      if (fbRes.ok) {
+        data = await fbRes.json();
+        rawGifs = data.gifs || [];
+      }
+    }
+
+    const posts = rawGifs.map(normalizeRedgifsItem).filter(p => p.url);
+
+    res.json({
+      posts,
+      page: data.page || Number(page),
+      pages: data.pages || 1,
+      total: data.total || posts.length,
+      hasMore: (data.page || Number(page)) < (data.pages || 1),
+      nextPage: (data.page || Number(page)) + 1
+    });
+  } catch (err) {
+    console.error("❌ RedGifs Search Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Endpoint: Trending RedGIFs clips
+app.get("/api/redgifs/trending", async (req, res) => {
+  try {
+    const { count = '30', page = '1', order = 'trending' } = req.query;
+    let token = await getRedgifsAccessToken();
+
+    console.log(`🔥 [RedGIFs API Trending] Order: "${order}" | Page: ${page}`);
+
+    const trendingUrl = `https://api.redgifs.com/v2/gifs/search?search_text=hot&order=${encodeURIComponent(order)}&count=${encodeURIComponent(count)}&page=${encodeURIComponent(page)}`;
+    
+    let response = await fetch(trendingUrl, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        'User-Agent': browserUA,
+        Accept: 'application/json',
+      },
+    });
+
+    if (response.status === 401 || response.status === 403) {
+      redgifsAccessToken = null;
+      token = await getRedgifsAccessToken();
+      response = await fetch(trendingUrl, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'User-Agent': browserUA,
+          Accept: 'application/json',
+        },
+      });
+    }
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: `RedGIFs Trending API returned ${response.status}` });
+    }
+
+    const data = await response.json();
+    const rawGifs = data.gifs || [];
+    const posts = rawGifs.map(normalizeRedgifsItem).filter(p => p.url);
+
+    res.json({
+      posts,
+      page: data.page || Number(page),
+      pages: data.pages || 1,
+      total: data.total || posts.length,
+      hasMore: (data.page || Number(page)) < (data.pages || 1),
+      nextPage: (data.page || Number(page)) + 1
+    });
+  } catch (err) {
+    console.error("❌ RedGifs Trending Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Endpoint: Females RedGIFs feed (female-focused tags/niches only)
+app.get("/api/redgifs/females", async (req, res) => {
+  try {
+    const { mood = 'all', count = '30', page = '1', order = 'trending' } = req.query;
+    let token = await getRedgifsAccessToken();
+
+    const moodTagMap = {
+      'hot-guys': 'male solo',
+      'big-dick': 'male',
+      'fit-body': 'fitness amateur',
+      'romantic': 'romantic couple',
+      'gentle-dom': 'bdsm female',
+      'couples': 'passionate couple',
+      'pov': 'female pov',
+      'audio': 'female voice',
+      'all': 'female solo'
+    };
+
+    const tagToSearch = moodTagMap[mood] || 'female solo';
+    console.log(`🌸 [RedGIFs API Females] Mood: "${mood}" -> Tag: "${tagToSearch}" | Page: ${page}`);
+
+    const searchUrl = `https://api.redgifs.com/v2/gifs/search?search_text=${encodeURIComponent(tagToSearch)}&order=${encodeURIComponent(order)}&count=${encodeURIComponent(count)}&page=${encodeURIComponent(page)}`;
+
+    let response = await fetch(searchUrl, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        'User-Agent': browserUA,
+        Accept: 'application/json',
+      },
+    });
+
+    if (response.status === 401 || response.status === 403) {
+      redgifsAccessToken = null;
+      token = await getRedgifsAccessToken();
+      response = await fetch(searchUrl, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          'User-Agent': browserUA,
+          Accept: 'application/json',
+        },
+      });
+    }
+
+    if (!response.ok) {
+      return res.status(response.status).json({ error: `RedGIFs Females API returned ${response.status}` });
+    }
+
+    const data = await response.json();
+    const rawGifs = data.gifs || [];
+    const posts = rawGifs.map(normalizeRedgifsItem).filter(p => p.url);
+
+    res.json({
+      posts,
+      page: data.page || Number(page),
+      pages: data.pages || 1,
+      total: data.total || posts.length,
+      hasMore: (data.page || Number(page)) < (data.pages || 1),
+      nextPage: (data.page || Number(page)) + 1
+    });
+  } catch (err) {
+    console.error("❌ RedGifs Females Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Endpoint: Get list of popular RedGIFs Niches / Categories
+app.get("/api/redgifs/niches", async (req, res) => {
+  try {
+    let token = await getRedgifsAccessToken();
+    const response = await fetch("https://api.redgifs.com/v2/niches", {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        'User-Agent': browserUA,
+        Accept: 'application/json',
+      },
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      return res.json(data);
+    }
+    res.json({
+      niches: [
+        { name: 'Amateur', id: 'amateur' },
+        { name: 'Cosplay', id: 'cosplay' },
+        { name: 'Solo Female', id: 'solo-female' },
+        { name: 'Fitness', id: 'fitness' },
+        { name: 'Sensual', id: 'sensual' }
+      ]
+    });
+  } catch (err) {
+    res.json({
+      niches: [
+        { name: 'Amateur', id: 'amateur' },
+        { name: 'Cosplay', id: 'cosplay' },
+        { name: 'Solo Female', id: 'solo-female' },
+        { name: 'Fitness', id: 'fitness' }
+      ]
+    });
+  }
+});
+
 // Endpoint: Fetch RedGifs media direct video stream URL
 app.get("/api/redgifs/:id", async (req, res) => {
   try {
@@ -688,8 +904,7 @@ app.get("/api/redgifs/:id", async (req, res) => {
   }
 });
 
-
-
 app.listen(PORT, () => {
   console.log(`✅ Proxy server running at http://localhost:${PORT}`);
 });
+

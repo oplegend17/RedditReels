@@ -48,6 +48,11 @@ export default function VideoGallery() {
   const [searchHasMore, setSearchHasMore] = useState(true);
   const [showDownloadAll, setShowDownloadAll] = useState(false);
 
+  const [sourceProvider, setSourceProvider] = useState('redgifs'); // 'redgifs' (primary) | 'reddit'
+  const [redgifsPage, setRedgifsPage] = useState(1);
+  const [redgifsHasMore, setRedgifsHasMore] = useState(true);
+  const [sortOrder, setSortOrder] = useState('trending'); // 'trending' | 'best' | 'latest'
+
   useEffect(() => {
     const fetchSubreddits = async () => {
       try {
@@ -71,6 +76,59 @@ export default function VideoGallery() {
   };
 
   const fetchVideos = async (isNewSubreddit = false) => {
+    // RedGIFs API Provider Branch (Primary)
+    if (sourceProvider === 'redgifs') {
+      const pageToFetch = isNewSubreddit ? 1 : redgifsPage;
+      const isSearch = isSearchMode || restrictionActive;
+      const effectiveQuery = restrictionActive
+        ? (searchQuery.trim() ? `${searchQuery.trim()} ${restrictionKeyword}` : restrictionKeyword)
+        : (searchQuery || 'hot');
+
+      try {
+        setIsLoading(true);
+        setError(null);
+        const endpoint = isSearch
+          ? `${BACKEND_API_URL}/api/redgifs/search?query=${encodeURIComponent(effectiveQuery)}&order=${sortOrder}&page=${pageToFetch}`
+          : `${BACKEND_API_URL}/api/redgifs/trending?order=${sortOrder}&page=${pageToFetch}`;
+
+        const response = await fetch(endpoint);
+        if (!response.ok) {
+          throw new Error('Failed to fetch from RedGIFs');
+        }
+        const data = await response.json();
+        let vids = (data.posts || []).map(p => ({
+          id: p.id,
+          title: p.title,
+          url: p.url,
+          thumbnail: p.thumbnail,
+          subreddit: p.subreddit,
+          heat: calculateHeat(p.ups, p.created_utc),
+          originalUrl: p.permalink,
+          isRedgifs: true
+        }));
+
+        if (restrictionActive) {
+          const kw = restrictionKeyword.toLowerCase().trim();
+          vids = vids.filter(v => {
+            const title = (v.title || '').toLowerCase();
+            const sub = (v.subreddit || '').toLowerCase();
+            return title.includes(kw) || sub.includes(kw);
+          });
+        }
+
+        setRedgifsPage(data.nextPage || pageToFetch + 1);
+        setRedgifsHasMore(data.hasMore ?? false);
+        setVideos(prev => isNewSubreddit ? vids : [...prev, ...vids]);
+      } catch (err) {
+        console.error('RedGIFs fetch error:', err);
+        setError('Failed to load RedGIFs content.');
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+
+    // Reddit API Provider Branch
     const isCustom = usingCustomSubreddit;
     const isMood = !!selectedMood;
     const isSearch = isSearchMode || restrictionActive;
@@ -172,6 +230,7 @@ export default function VideoGallery() {
   };
 
   useEffect(() => {
+    setVideos([]);
     if (restrictionActive) {
       fetchVideos(true);
     } else if (isSearchMode) {
@@ -180,10 +239,10 @@ export default function VideoGallery() {
       fetchVideos(true);
     } else if (usingCustomSubreddit) {
       if (customSubreddit) fetchVideos(true);
-    } else if (selectedSubreddit) {
+    } else if (selectedSubreddit || sourceProvider === 'redgifs') {
       fetchVideos(true);
     }
-  }, [selectedSubreddit, usingCustomSubreddit, selectedMood, isSearchMode, searchQuery, restrictionActive]);
+  }, [selectedSubreddit, usingCustomSubreddit, selectedMood, isSearchMode, searchQuery, restrictionActive, sourceProvider, sortOrder]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -271,6 +330,17 @@ export default function VideoGallery() {
     if (!input || aiLoading) return;
     setAiLoading(true);
     setVideos([]);
+
+    // In RedGIFs mode, search directly via RedGIFs API
+    if (sourceProvider === 'redgifs') {
+      setSelectedMood(null);
+      setUsingCustomSubreddit(false);
+      setIsSearchMode(true);
+      setSearchQuery(input);
+      setAiLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch(`${BACKEND_API_URL}/api/ai/mood`, {
         method: 'POST',
@@ -280,56 +350,24 @@ export default function VideoGallery() {
       const data = await res.json();
 
       if (data.intent === 'search' && data.query) {
-        // AI decided this is a keyword/name search — fetch directly
         setSelectedMood(null);
         setUsingCustomSubreddit(false);
         setIsSearchMode(true);
         setSearchQuery(data.query);
-        setVideos([]);
-        // Fetch directly since state updates are async
-        try {
-          setIsLoading(true);
-          const url = `${BACKEND_API_URL}/api/search?q=${encodeURIComponent(data.query)}`;
-          const r = await fetch(url);
-          if (!r.ok) throw new Error('Search failed');
-          const d = await r.json();
-          const vids = (d?.data?.children || [])
-            .map(post => post?.data)
-            .filter(p => {
-              if (!p) return false;
-              const u = p.url_overridden_by_dest || p.url || '';
-              return (
-                (p.is_video && p.media?.reddit_video?.fallback_url) ||
-                p.preview?.reddit_video_preview?.fallback_url ||
-                u.includes('redgifs.com') ||
-                u.includes('v.redd.it')
-              );
-            })
-            .map(p => ({
-              id: p.id,
-              title: p.title,
-              url: p?.media?.reddit_video?.fallback_url || p?.preview?.reddit_video_preview?.fallback_url || '',
-              thumbnail: p?.preview?.images?.[0]?.source?.url?.replace(/&amp;/g, '&') || '',
-              subreddit: p.subreddit,
-              heat: calculateHeat(p.ups, p.created_utc),
-              originalUrl: p.url_overridden_by_dest || p.url,
-              isRedgifs: (p.url_overridden_by_dest || p.url || '').includes('redgifs.com')
-            }))
-            .filter(p => p.url || p.isRedgifs);
-          setSearchAfterId(d?.data?.after);
-          setSearchHasMore(!!d?.data?.after && vids.length > 0);
-          setVideos(vids);
-        } catch (e) {
-          console.error('Search fetch error:', e);
-        } finally {
-          setIsLoading(false);
-        }
       } else if (data.intent === 'mood' && data.subreddits?.length) {
-        // AI decided this is a vibe — pick subreddits
         handleMoodSelect({ id: 'ai', label: `✨ ${input}`, subreddits: data.subreddits });
+      } else {
+        setSelectedMood(null);
+        setUsingCustomSubreddit(false);
+        setIsSearchMode(true);
+        setSearchQuery(input);
       }
     } catch (err) {
-      console.error('AI smart search error:', err);
+      console.warn('AI router fallback to direct search:', err);
+      setSelectedMood(null);
+      setUsingCustomSubreddit(false);
+      setIsSearchMode(true);
+      setSearchQuery(input);
     } finally {
       setAiLoading(false);
     }
@@ -433,8 +471,33 @@ export default function VideoGallery() {
 
         {/* Browse / search bar — cohesive control strip */}
         <div className="glass-panel p-2 rounded-2xl flex flex-wrap items-center gap-2 w-full md:w-fit mx-auto">
+          {/* Content Source Provider Switcher */}
+          <div className="flex items-center bg-black/40 p-1 rounded-xl border border-white/10 shrink-0">
+            <button
+              onClick={() => { setSourceProvider('reddit'); setVideos([]); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                sourceProvider === 'reddit'
+                  ? 'bg-neon-pink text-white shadow-[0_0_10px_rgba(255,47,86,0.4)]'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              Reddit
+            </button>
+            <button
+              onClick={() => { setSourceProvider('redgifs'); setVideos([]); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                sourceProvider === 'redgifs'
+                  ? 'bg-gradient-to-r from-red-600 to-neon-pink text-white shadow-[0_0_10px_rgba(255,47,86,0.4)]'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              <span>RedGIFs</span>
+              <span className="text-[9px] uppercase tracking-wider bg-white/20 px-1 rounded font-black">API</span>
+            </button>
+          </div>
+
           {/* Browse */}
-          {!restrictionActive && (
+          {!restrictionActive && sourceProvider === 'reddit' && (
             <button
               onClick={() => setShowBrowser(true)}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 hover:text-white text-xs font-bold transition-all border border-white/10"

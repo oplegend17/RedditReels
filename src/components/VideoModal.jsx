@@ -34,7 +34,8 @@ export default function VideoModal({ video, onClose, isRedgifs, originalUrl, isG
     if (sharedVideoRef) sharedVideoRef.current = node;
   };
 
-  const shareUrl = `${window.location.origin}/watch/${video.subreddit}/${video.id}`;
+  const cleanSub = (video.subreddit || 'redgifs').replace('/', '_');
+  const shareUrl = `${window.location.origin}/watch/${cleanSub}/${video.id}`;
 
 
   const copyLink = async (e) => {
