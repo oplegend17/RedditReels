@@ -78,6 +78,13 @@ export default function VideoGallery() {
   const fetchVideos = async (isNewSubreddit = false) => {
     // RedGIFs API Provider Branch (Primary)
     if (sourceProvider === 'redgifs') {
+      if (!isNewSubreddit && (isLoading || !redgifsHasMore)) return;
+
+      if (isNewSubreddit) {
+        setRedgifsPage(1);
+        setRedgifsHasMore(true);
+      }
+
       const pageToFetch = isNewSubreddit ? 1 : redgifsPage;
       const isSearch = isSearchMode || restrictionActive || !!selectedMood || usingCustomSubreddit || !!selectedSubreddit;
 
@@ -127,7 +134,7 @@ export default function VideoGallery() {
         }
 
         setRedgifsPage(data.nextPage || pageToFetch + 1);
-        setRedgifsHasMore(data.hasMore ?? false);
+        setRedgifsHasMore(data.hasMore ?? (vids.length > 0));
         setVideos(prev => isNewSubreddit ? vids : [...prev, ...vids]);
       } catch (err) {
         console.error('RedGIFs fetch error:', err);
@@ -258,15 +265,16 @@ export default function VideoGallery() {
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && !isLoading) {
-          fetchVideos();
+          const canLoad = sourceProvider === 'redgifs' ? redgifsHasMore : true;
+          if (canLoad) fetchVideos(false);
         }
       },
-      { threshold: 0.1, rootMargin: '200px' }
+      { threshold: 0.1, rootMargin: '100px' }
     );
     
     if (loadingRef.current) observer.observe(loadingRef.current);
     return () => observer.disconnect();
-  }, [isLoading, hasMore, customHasMore]);
+  }, [isLoading, hasMore, customHasMore, redgifsHasMore, sourceProvider]);
 
   const handleFavoriteClick = async (e, video) => {
     e.stopPropagation();
@@ -343,6 +351,7 @@ export default function VideoGallery() {
 
     // In RedGIFs mode, search directly via RedGIFs API
     if (sourceProvider === 'redgifs') {
+      setSelectedSubreddit(null);
       setSelectedMood(null);
       setUsingCustomSubreddit(false);
       setIsSearchMode(true);
@@ -359,6 +368,7 @@ export default function VideoGallery() {
       });
       const data = await res.json();
 
+      setSelectedSubreddit(null);
       if (data.intent === 'search' && data.query) {
         setSelectedMood(null);
         setUsingCustomSubreddit(false);
@@ -374,6 +384,7 @@ export default function VideoGallery() {
       }
     } catch (err) {
       console.warn('AI router fallback to direct search:', err);
+      setSelectedSubreddit(null);
       setSelectedMood(null);
       setUsingCustomSubreddit(false);
       setIsSearchMode(true);

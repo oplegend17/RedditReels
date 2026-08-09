@@ -667,12 +667,64 @@ function normalizeRedgifsItem(gif) {
   };
 }
 
+const redgifsCache = new Map();
+let lastSuccessfulGifs = [
+  {
+    id: "UnpleasantShockingConure",
+    userName: "redgifs",
+    tags: ["Hot", "Trending"],
+    urls: {
+      hd: "https://thumbs2.redgifs.com/UnpleasantShockingConure-mobile.mp4",
+      sd: "https://thumbs2.redgifs.com/UnpleasantShockingConure-mobile.mp4",
+      poster: "https://thumbs2.redgifs.com/UnpleasantShockingConure-mobile.jpg"
+    }
+  },
+  {
+    id: "EmotionalNaiveFly",
+    userName: "redgifs",
+    tags: ["Hot", "Trending"],
+    urls: {
+      hd: "https://thumbs2.redgifs.com/EmotionalNaiveFly-mobile.mp4",
+      sd: "https://thumbs2.redgifs.com/EmotionalNaiveFly-mobile.mp4",
+      poster: "https://thumbs2.redgifs.com/EmotionalNaiveFly-mobile.jpg"
+    }
+  }
+];
+
+async function seedRedgifsFallback() {
+  try {
+    let token = await getRedgifsAccessToken();
+    if (!token) return;
+    const res = await fetch("https://api.redgifs.com/v2/gifs/search?search_text=hot&count=30", {
+      headers: { Authorization: `Bearer ${token}`, 'User-Agent': browserUA, Accept: 'application/json' }
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.gifs?.length) {
+        lastSuccessfulGifs = data.gifs;
+        console.log(`✅ Seeded RedGIFs fallback buffer with ${lastSuccessfulGifs.length} items`);
+      }
+    }
+  } catch (err) {
+    console.warn("⚠️ RedGIFs seed buffer warning:", err.message);
+  }
+}
+seedRedgifsFallback();
+
 // Endpoint: Search or browse RedGifs media by tag/keyword/creator
 app.get("/api/redgifs/search", async (req, res) => {
   try {
     const { query = 'hot', count = '30', page = '1' } = req.query;
     let token = await getRedgifsAccessToken();
     const q = (query && query.trim()) ? query.trim() : 'hot';
+    const cacheKey = `search_${q.toLowerCase()}_${page}_${count}`;
+
+    if (redgifsCache.has(cacheKey)) {
+      const cached = redgifsCache.get(cacheKey);
+      if (Date.now() - cached.timestamp < 60000) {
+        return res.json(cached.data);
+      }
+    }
 
     console.log(`🎬 [RedGIFs API Search] Query: "${q}" | Page: ${page}`);
 
@@ -698,7 +750,7 @@ app.get("/api/redgifs/search", async (req, res) => {
     let rawGifs = data.gifs || [];
 
     // 2. If tag search returned 0 items, check if q is a Creator / Username
-    if (rawGifs.length === 0) {
+    if (rawGifs.length === 0 && response.status !== 429) {
       const userUrl = `https://api.redgifs.com/v2/users/${encodeURIComponent(q)}/search?count=${encodeURIComponent(count)}&page=${encodeURIComponent(page)}`;
       const userRes = await fetch(userUrl, { headers: authHeaders });
       if (userRes.ok) {
@@ -711,26 +763,61 @@ app.get("/api/redgifs/search", async (req, res) => {
       }
     }
 
-    // 3. Fallback to generic search_text=q if still 0
-    if (rawGifs.length === 0) {
+    // 3. Try search_text=q with order=latest
+    if (rawGifs.length === 0 && response.status !== 429) {
+      const latestUrl = `https://api.redgifs.com/v2/gifs/search?search_text=${encodeURIComponent(q)}&order=latest&count=${encodeURIComponent(count)}&page=${encodeURIComponent(page)}`;
+      const latestRes = await fetch(latestUrl, { headers: authHeaders });
+      if (latestRes.ok) {
+        const latestData = await latestRes.json();
+        if (latestData.gifs && latestData.gifs.length > 0) {
+          data = latestData;
+          rawGifs = latestData.gifs;
+        }
+      }
+    }
+
+    // 4. Try generic search_text=q if still 0
+    if (rawGifs.length === 0 && response.status !== 429) {
       const fallbackUrl = `https://api.redgifs.com/v2/gifs/search?search_text=${encodeURIComponent(q)}&count=${encodeURIComponent(count)}&page=${encodeURIComponent(page)}`;
       const fbRes = await fetch(fallbackUrl, { headers: authHeaders });
       if (fbRes.ok) {
-        data = await fbRes.json();
-        rawGifs = data.gifs || [];
+        const fbData = await fbRes.json();
+        if (fbData.gifs && fbData.gifs.length > 0) {
+          data = fbData;
+          rawGifs = fbData.gifs;
+        }
+      }
+    }
+
+    // 5. High-availability buffer fallback on rate-limit (429) or empty responses
+    if (rawGifs.length > 0) {
+      lastSuccessfulGifs = rawGifs;
+    } else {
+      if (lastSuccessfulGifs.length === 0) {
+        await seedRedgifsFallback();
+      }
+      if (lastSuccessfulGifs.length > 0) {
+        console.log(`  🛡️ RedGIFs High-Availability Guard -> Serving ${lastSuccessfulGifs.length} fallback clips for "${q}"`);
+        rawGifs = lastSuccessfulGifs;
       }
     }
 
     const posts = rawGifs.map(normalizeRedgifsItem).filter(p => p.url);
 
-    res.json({
+    const result = {
       posts,
       page: data.page || Number(page),
       pages: data.pages || 1,
       total: data.total || posts.length,
-      hasMore: (data.page || Number(page)) < (data.pages || 1),
+      hasMore: posts.length > 0,
       nextPage: (data.page || Number(page)) + 1
-    });
+    };
+
+    if (posts.length > 0) {
+      redgifsCache.set(cacheKey, { timestamp: Date.now(), data: result });
+    }
+
+    res.json(result);
   } catch (err) {
     console.error("❌ RedGifs Search Error:", err.message);
     res.status(500).json({ error: err.message });
@@ -767,12 +854,16 @@ app.get("/api/redgifs/trending", async (req, res) => {
       });
     }
 
-    if (!response.ok) {
-      return res.status(response.status).json({ error: `RedGIFs Trending API returned ${response.status}` });
+    let data = response.ok ? await response.json() : {};
+    let rawGifs = data.gifs || [];
+
+    if (rawGifs.length > 0) {
+      lastSuccessfulGifs = rawGifs;
+    } else if (lastSuccessfulGifs.length > 0) {
+      console.log(`  🛡️ RedGIFs Trending Rate-Limit Guard (429) -> Serving ${lastSuccessfulGifs.length} fallback clips`);
+      rawGifs = lastSuccessfulGifs;
     }
 
-    const data = await response.json();
-    const rawGifs = data.gifs || [];
     const posts = rawGifs.map(normalizeRedgifsItem).filter(p => p.url);
 
     res.json({
@@ -780,7 +871,7 @@ app.get("/api/redgifs/trending", async (req, res) => {
       page: data.page || Number(page),
       pages: data.pages || 1,
       total: data.total || posts.length,
-      hasMore: (data.page || Number(page)) < (data.pages || 1),
+      hasMore: posts.length > 0,
       nextPage: (data.page || Number(page)) + 1
     });
   } catch (err) {
@@ -832,12 +923,16 @@ app.get("/api/redgifs/females", async (req, res) => {
       });
     }
 
-    if (!response.ok) {
-      return res.status(response.status).json({ error: `RedGIFs Females API returned ${response.status}` });
+    let data = response.ok ? await response.json() : {};
+    let rawGifs = data.gifs || [];
+
+    if (rawGifs.length > 0) {
+      lastSuccessfulGifs = rawGifs;
+    } else if (lastSuccessfulGifs.length > 0) {
+      console.log(`  🛡️ RedGIFs Females Rate-Limit Guard (429) -> Serving ${lastSuccessfulGifs.length} fallback clips`);
+      rawGifs = lastSuccessfulGifs;
     }
 
-    const data = await response.json();
-    const rawGifs = data.gifs || [];
     const posts = rawGifs.map(normalizeRedgifsItem).filter(p => p.url);
 
     res.json({
@@ -845,7 +940,7 @@ app.get("/api/redgifs/females", async (req, res) => {
       page: data.page || Number(page),
       pages: data.pages || 1,
       total: data.total || posts.length,
-      hasMore: (data.page || Number(page)) < (data.pages || 1),
+      hasMore: posts.length > 0,
       nextPage: (data.page || Number(page)) + 1
     });
   } catch (err) {
