@@ -4,6 +4,7 @@ import Hls from 'hls.js';
 import { getRedditHlsUrl, isRedditUrl, getRedgifsId } from '../lib/media-utils';
 import WatchParty from './WatchParty';
 import { useWatchPartyContext } from '../context/WatchPartyContext';
+import { useHistory } from '../lib/useHistory';
 
 const BACKEND = import.meta.env.VITE_BACKEND_API_URL;
 
@@ -15,9 +16,18 @@ export default function VideoModal({ video, onClose, isRedgifs, originalUrl, isG
   const [copied, setCopied]   = useState(false);
   const [showParty, setShowParty] = useState(false);
   const navigate = useNavigate();
+  const { markAsSeen } = useHistory();
+
+  // Mark video as watched in history & Firestore
+  useEffect(() => {
+    if (video) {
+      markAsSeen(video);
+    }
+  }, [video, markAsSeen]);
 
   const partyContext = useWatchPartyContext();
   const { isHost, status, syncVideo, videoRef: sharedVideoRef, createRoom } = partyContext || {};
+
 
   // Host: automatically sync video with room on mount and clear on unmount
   useEffect(() => {

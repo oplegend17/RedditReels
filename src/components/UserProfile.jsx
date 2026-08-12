@@ -66,7 +66,7 @@ function achievementEmoji(iconName) {
   return map[iconName] || '🏅';
 }
 
-const TABS = ['Overview', 'Achievements', 'Favorites', 'Subreddits', 'Settings'];
+const TABS = ['Overview', 'Achievements', 'Favorites', 'Watched', 'Subreddits', 'Settings'];
 
 export default function UserProfile({ user }) {
   const { profile, isAdmin } = useOutletContext();
@@ -77,22 +77,9 @@ export default function UserProfile({ user }) {
   const [updating, setUpdating] = useState(false);
   const [updateMsg, setUpdateMsg] = useState(null);
 
-  const toggleAdminMode = async () => {
-    setUpdating(true);
-    try {
-      const newRole = profile?.role === 'admin' ? 'user' : 'admin';
-      await setDoc(doc(db, 'users', user.uid), { role: newRole }, { merge: true });
-      setUpdateMsg(newRole === 'admin' ? 'Promoted to Admin!' : 'Role set to User.');
-      setTimeout(() => setUpdateMsg(null), 2000);
-    } catch (err) {
-      setUpdateMsg('Error: ' + err.message);
-      setTimeout(() => setUpdateMsg(null), 3000);
-    } finally {
-      setUpdating(false);
-    }
-  };
   const [activeTab, setActiveTab] = useState('Overview');
   const [selectedVideo, setSelectedVideo] = useState(null);
+  const [watchedVideos, setWatchedVideos] = useState([]);
 
   const { stats, level, levelProgress, unlockedAchievements, allAchievements, getProgress } = useAchievements();
   const { favorites } = useFavorites();
@@ -119,6 +106,21 @@ export default function UserProfile({ user }) {
         setUsername(defaultName);
         setAvatarUrl(user.photoURL || '');
         setJoinDate(new Date());
+      }
+
+      // Load watched videos subcollection
+      try {
+        const { collection, getDocs } = await import('firebase/firestore');
+        const watchedSnap = await getDocs(collection(db, 'users', user.uid, 'watched'));
+        const list = watchedSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        list.sort((a, b) => {
+          const timeA = a.watchedAt?.toDate ? a.watchedAt.toDate().getTime() : (a.watchedAt instanceof Date ? a.watchedAt.getTime() : 0);
+          const timeB = b.watchedAt?.toDate ? b.watchedAt.toDate().getTime() : (b.watchedAt instanceof Date ? b.watchedAt.getTime() : 0);
+          return timeB - timeA;
+        });
+        setWatchedVideos(list);
+      } catch (err) {
+        console.warn("Could not fetch user watched subcollection:", err);
       }
     } finally {
       setLoading(false);
@@ -357,6 +359,39 @@ export default function UserProfile({ user }) {
           )}
         </div>
       )}
+      {/* Watched */}
+      {activeTab === 'Watched' && (
+        <div>
+          {watchedVideos.length === 0 && seenIds.size === 0 ? (
+            <div className="flex flex-col items-center py-20 gap-3 text-white/30">
+              <span className="text-5xl">👁️</span>
+              <p>No watched history yet</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {watchedVideos.map(vid => (
+                <div
+                  key={vid.id}
+                  onClick={() => setSelectedVideo(vid)}
+                  className="group relative aspect-[9/16] bg-black rounded-2xl overflow-hidden border border-white/5 hover:border-white/20 cursor-pointer transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+                >
+                  {vid.thumbnail ? (
+                    <img src={vid.thumbnail} alt={vid.title} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-white/5 flex items-center justify-center text-3xl">▶️</div>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <div className="absolute bottom-0 left-0 right-0 p-3 translate-y-2 group-hover:translate-y-0 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                    <p className="text-xs text-white font-medium line-clamp-2">{vid.title || 'Watched Clip'}</p>
+                    <p className="text-[10px] text-white/50 mt-0.5">r/{vid.subreddit || 'video'}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Subreddits */}
       {activeTab === 'Subreddits' && (
         <div>

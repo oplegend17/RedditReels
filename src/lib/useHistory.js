@@ -103,7 +103,7 @@ export function useHistory() {
     if (!video) return;
     
     const isObject = typeof video === 'object';
-    const videoId = isObject ? video.id : video;
+    const videoId = isObject ? video.id : (typeof video === 'string' || typeof video === 'number' ? String(video) : null);
     
     if (!videoId) return;
     
@@ -129,18 +129,26 @@ export function useHistory() {
       return newSet;
     });
 
-    if (isObject && user) {
+    const currentUser = user || auth.currentUser;
+    if (currentUser) {
       try {
-        const watchDocRef = doc(db, 'users', user.uid, 'watched', videoId);
-        await setDoc(watchDocRef, {
-          id: videoId,
-          videoId: videoId,
-          title: video.title || 'Untitled',
+        const watchDocRef = doc(db, 'users', currentUser.uid, 'watched', String(videoId));
+        const videoData = isObject ? {
+          id: String(videoId),
+          videoId: String(videoId),
+          title: video.title || 'Reddit Video',
           url: video.url || '',
           thumbnail: video.thumbnail || '',
           subreddit: video.subreddit || '',
           watchedAt: new Date()
-        }, { merge: true });
+        } : {
+          id: String(videoId),
+          videoId: String(videoId),
+          title: `Video #${videoId}`,
+          watchedAt: new Date()
+        };
+
+        await setDoc(watchDocRef, videoData, { merge: true });
         console.log(`Saved video ${videoId} metadata to watch history subcollection`);
       } catch (error) {
         console.error("Error saving watched video metadata:", error);

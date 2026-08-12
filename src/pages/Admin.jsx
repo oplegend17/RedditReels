@@ -78,14 +78,38 @@ export default function Admin() {
       setUserDownloads(downloadsList);
 
       // 3. Process Watched History
-      const watchedList = watchedSnap.docs.map(doc => ({
+      let watchedList = watchedSnap.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
+
+      // Fallback merge from userData/history.seen array so watched history is never lost
+      if (historySnap.exists()) {
+        const historyData = historySnap.data();
+        const seenArray = Array.isArray(historyData.seen) ? historyData.seen : [];
+        const existingIds = new Set(watchedList.map(w => String(w.id || w.videoId)));
+
+        seenArray.forEach(seenId => {
+          const strId = String(seenId);
+          if (strId && !existingIds.has(strId)) {
+            watchedList.push({
+              id: strId,
+              videoId: strId,
+              title: `Watched Video #${strId}`,
+              url: '',
+              thumbnail: '',
+              subreddit: 'watched',
+              watchedAt: historyData.lastUpdated?.toDate ? historyData.lastUpdated.toDate() : new Date()
+            });
+            existingIds.add(strId);
+          }
+        });
+      }
+
       // Sort watched history by watchedAt descending
       watchedList.sort((a, b) => {
-        const timeA = a.watchedAt?.toDate ? a.watchedAt.toDate().getTime() : 0;
-        const timeB = b.watchedAt?.toDate ? b.watchedAt.toDate().getTime() : 0;
+        const timeA = a.watchedAt?.toDate ? a.watchedAt.toDate().getTime() : (a.watchedAt instanceof Date ? a.watchedAt.getTime() : 0);
+        const timeB = b.watchedAt?.toDate ? b.watchedAt.toDate().getTime() : (b.watchedAt instanceof Date ? b.watchedAt.getTime() : 0);
         return timeB - timeA;
       });
       setUserWatched(watchedList);
