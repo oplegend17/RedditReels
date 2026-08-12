@@ -448,6 +448,7 @@ function ReelVideo({ video, isActive, isMuted, autoScroll, onScrollNext }) {
         poster={video.thumbnail}
         className="w-full h-full object-contain"
         playsInline
+        referrerPolicy="no-referrer"
         loop={!autoScroll}
         muted={isMuted}
         onEnded={() => autoScroll && onScrollNext()}

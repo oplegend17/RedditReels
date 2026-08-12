@@ -204,6 +204,7 @@ export default function Watch() {
           ref={videoRef}
           poster={video.thumbnail}
           controls loop playsInline
+          referrerPolicy="no-referrer"
           className="w-full object-contain"
           style={{ maxHeight: '80dvh' }}
         />

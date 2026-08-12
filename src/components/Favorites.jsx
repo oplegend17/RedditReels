@@ -124,6 +124,7 @@ export default function Favorites() {
                 loop
                 muted
                 playsInline
+                referrerPolicy="no-referrer"
                 className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity duration-500"
               />
               

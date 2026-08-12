@@ -544,6 +544,43 @@ app.get('/api/proxy-image', async (req, res) => {
   }
 });
 
+// Generic video streaming proxy (strips browser referrer & forwards range headers)
+app.get('/api/proxy-video', async (req, res) => {
+  const videoUrl = req.query.url;
+  if (!videoUrl) return res.status(400).json({ error: 'Missing video URL' });
+
+  try {
+    const headers = {
+      'User-Agent': browserUA,
+      'Accept': '*/*',
+    };
+    if (req.headers.range) {
+      headers['Range'] = req.headers.range;
+    }
+
+    const videoRes = await fetch(videoUrl, { headers });
+    
+    res.status(videoRes.status);
+    if (videoRes.headers.get('content-type')) {
+      res.setHeader('Content-Type', videoRes.headers.get('content-type'));
+    }
+    if (videoRes.headers.get('content-length')) {
+      res.setHeader('Content-Length', videoRes.headers.get('content-length'));
+    }
+    if (videoRes.headers.get('content-range')) {
+      res.setHeader('Content-Range', videoRes.headers.get('content-range'));
+    }
+    if (videoRes.headers.get('accept-ranges')) {
+      res.setHeader('Accept-Ranges', videoRes.headers.get('accept-ranges'));
+    }
+
+    videoRes.body.pipe(res);
+  } catch (err) {
+    console.error('Video proxy error:', err);
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+  }
+});
+
 // Endpoint to merge video and audio tracks for Reddit video downloads
 app.get('/api/merge-video', async (req, res) => {
   const videoUrl = req.query.url;

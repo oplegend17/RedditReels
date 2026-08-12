@@ -315,6 +315,7 @@ function VisualCard({ post, isPlaying, isFav, onFav, mood }) {
             src={post.url}
             poster={post.thumbnail}
             loop muted playsInline
+            referrerPolicy="no-referrer"
             className="w-full h-full object-cover"
           />
         </div>

@@ -397,6 +397,7 @@ function GuestPlayer({ video, videoRef }) {
       poster={video.thumbnail}
       playsInline
       muted
+      referrerPolicy="no-referrer"
       className="w-full h-full object-contain bg-black"
     />
   );

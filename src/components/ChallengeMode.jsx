@@ -521,6 +521,7 @@ export default function ChallengeMode() {
           src={currentVideo.url}
           poster={currentVideo.thumbnail}
           autoPlay
+          referrerPolicy="no-referrer"
           loop={selectedChallenge?.id !== 'rapidFire' && selectedChallenge?.id !== 'roulette'}
           muted={false}
           playsInline

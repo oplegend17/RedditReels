@@ -110,6 +110,7 @@ export function LazyVideo({ src, poster, className, isPlaying, onToggleLike, isL
             poster={poster}
             loop
             playsInline
+            referrerPolicy="no-referrer"
             className="w-full h-full object-cover"
           />
           

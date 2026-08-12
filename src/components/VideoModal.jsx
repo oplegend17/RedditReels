@@ -207,6 +207,7 @@ export default function VideoModal({ video, onClose, isRedgifs, originalUrl, isG
             loop
             playsInline
             muted={muted}
+            referrerPolicy="no-referrer"
             className="w-full sm:w-auto max-h-[60dvh] sm:max-h-[80vh] object-contain block" />
 
           {/* Mute toggle overlay */}
