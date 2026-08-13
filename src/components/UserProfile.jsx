@@ -14,10 +14,10 @@ const TIER_ORDER = ['platinum', 'gold', 'silver', 'bronze'];
 
 function StatCard({ label, value, icon }) {
   return (
-    <div className="flex flex-col items-center gap-1 bg-white/5 border border-white/10 rounded-2xl px-5 py-4 flex-1 min-w-0">
-      <span className="text-2xl">{icon}</span>
-      <span className="text-2xl font-black text-white">{value}</span>
-      <span className="text-xs text-white/40 font-medium text-center">{label}</span>
+    <div className="flex flex-col items-center justify-center gap-1 bg-white/5 border border-white/10 rounded-2xl px-3 py-3.5 sm:px-5 sm:py-4 w-full min-w-0 overflow-hidden shadow-sm">
+      <span className="text-xl sm:text-2xl">{icon}</span>
+      <span className="text-xl sm:text-2xl font-black text-white">{value}</span>
+      <span className="text-[11px] sm:text-xs text-white/40 font-medium text-center leading-tight truncate w-full" title={label}>{label}</span>
     </div>
   );
 }
@@ -190,11 +190,11 @@ export default function UserProfile({ user }) {
           </div>
 
           {/* Info */}
-          <div className="flex-1 text-center sm:text-left">
-            <h1 className="text-3xl font-black text-white tracking-tight">{username}</h1>
-            <p className="text-white/40 text-sm mt-0.5">{user.email}</p>
+          <div className="flex-1 text-center sm:text-left min-w-0 max-w-full overflow-hidden">
+            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight truncate max-w-full" title={username}>{username}</h1>
+            <p className="text-white/40 text-xs sm:text-sm mt-0.5 truncate max-w-full" title={user.email}>{user.email}</p>
             {joinDate && (
-              <p className="text-white/30 text-xs mt-1">Member since {joinDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
+              <p className="text-white/30 text-[11px] sm:text-xs mt-1 truncate max-w-full">Member since {joinDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
             )}
 
             {/* XP bar */}
@@ -232,16 +232,16 @@ export default function UserProfile({ user }) {
         </div>
       </div>
 
-      {/* Tabs — icon + label on mobile, label only on sm+ */}
-      <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10 mb-6 overflow-x-auto no-scrollbar gap-0.5">
+      {/* Tabs — scrollable horizontal row with clean padding */}
+      <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10 mb-6 overflow-x-auto no-scrollbar gap-1">
         {TABS.map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`flex-1 py-2 px-2 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all duration-200 min-w-[60px] ${
+            className={`shrink-0 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all duration-200 ${
               activeTab === tab
-                ? 'bg-white text-black shadow'
-                : 'text-white/40 hover:text-white'
+                ? 'bg-white text-black shadow-md'
+                : 'text-white/40 hover:text-white hover:bg-white/5'
             }`}
           >
             {tab}
@@ -251,16 +251,16 @@ export default function UserProfile({ user }) {
 
       {/* Overview */}
       {activeTab === 'Overview' && (
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           {/* Stats grid */}
-          <div className="flex gap-3 flex-wrap">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <StatCard label="Total XP" value={xp.toLocaleString()} icon="⚡" />
             <StatCard label="Challenges" value={stats.challengesCompleted || 0} icon="🎯" />
             <StatCard label="Day Streak" value={stats.dailyStreak || 0} icon="🔥" />
             <StatCard label="Videos Watched" value={seenIds.size} icon="▶️" />
           </div>
 
-          <div className="flex gap-3 flex-wrap">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <StatCard label="Nuclear Watched" value={stats.nuclearVideosWatched || 0} icon="☢️" />
             <StatCard label="Fire Watched" value={stats.fireVideosWatched || 0} icon="🔥" />
             <StatCard label="Saved Videos" value={favorites.length} icon="❤️" />

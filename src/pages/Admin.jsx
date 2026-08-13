@@ -487,10 +487,10 @@ export default function Admin() {
           </div>
 
           {/* Sub Tab Switcher */}
-          <div className="flex flex-wrap gap-1 bg-white/5 p-1 rounded-xl border border-white/10 shrink-0">
+          <div className="flex overflow-x-auto no-scrollbar gap-1 bg-white/5 p-1 rounded-xl border border-white/10 shrink-0 max-w-full">
             <button
               onClick={() => setActiveTabMap(prev => ({ ...prev, [targetUser.id]: 'favorites' }))}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer ${
+              className={`shrink-0 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer whitespace-nowrap ${
                 activeTab === 'favorites'
                   ? 'bg-white text-black shadow'
                   : 'text-white/40 hover:text-white'
@@ -500,7 +500,7 @@ export default function Admin() {
             </button>
             <button
               onClick={() => setActiveTabMap(prev => ({ ...prev, [targetUser.id]: 'downloads' }))}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer ${
+              className={`shrink-0 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer whitespace-nowrap ${
                 activeTab === 'downloads'
                   ? 'bg-white text-black shadow'
                   : 'text-white/40 hover:text-white'
@@ -510,7 +510,7 @@ export default function Admin() {
             </button>
             <button
               onClick={() => setActiveTabMap(prev => ({ ...prev, [targetUser.id]: 'watched' }))}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer ${
+              className={`shrink-0 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer whitespace-nowrap ${
                 activeTab === 'watched'
                   ? 'bg-white text-black shadow'
                   : 'text-white/40 hover:text-white'
@@ -520,7 +520,7 @@ export default function Admin() {
             </button>
             <button
               onClick={() => setActiveTabMap(prev => ({ ...prev, [targetUser.id]: 'stats' }))}
-              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer ${
+              className={`shrink-0 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 cursor-pointer whitespace-nowrap ${
                 activeTab === 'stats'
                   ? 'bg-white text-black shadow'
                   : 'text-white/40 hover:text-white'
