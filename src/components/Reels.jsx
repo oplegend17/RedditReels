@@ -17,6 +17,8 @@ export default function Reels({ subreddits = [] }) {
   const partyContext = useWatchPartyContext();
   const { isHost, status, syncVideo } = partyContext || {};
 
+  const [sourceProvider, setSourceProvider] = useState('redgifs'); // 'redgifs' (primary) | 'reddit'
+  const [redditAfter, setRedditAfter] = useState(null);
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -43,46 +45,118 @@ export default function Reels({ subreddits = [] }) {
       if (reset) setLoading(true);
       else setLoadingMore(true);
 
-      const targetPage = reset ? 1 : page;
-      let url = `${BACKEND_API_URL}/api/redgifs/trending?page=${targetPage}&count=20`;
-      if (restrictionActive) {
-        url = `${BACKEND_API_URL}/api/redgifs/search?query=${encodeURIComponent(restrictionKeyword)}&page=${targetPage}`;
-      } else if (subreddits.length > 0) {
-        url = `${BACKEND_API_URL}/api/redgifs/search?query=${encodeURIComponent(subreddits[0])}&page=${targetPage}`;
-      }
+      if (sourceProvider === 'redgifs') {
+        const targetPage = reset ? 1 : page;
+        let url = `${BACKEND_API_URL}/api/redgifs/trending?page=${targetPage}&count=20`;
+        if (restrictionActive) {
+          url = `${BACKEND_API_URL}/api/redgifs/search?query=${encodeURIComponent(restrictionKeyword)}&page=${targetPage}`;
+        } else if (subreddits.length > 0) {
+          url = `${BACKEND_API_URL}/api/redgifs/search?query=${encodeURIComponent(subreddits[0])}&page=${targetPage}`;
+        }
 
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      const rawPosts = data.posts || [];
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const rawPosts = data.posts || [];
 
-      let parsedReels = rawPosts.map(p => ({
-        id: p.id,
-        title: p.title,
-        url: p.url,
-        thumbnail: p.thumbnail,
-        subreddit: p.subreddit,
-        originalUrl: p.permalink,
-        isRedgifs: true,
-      }));
+        let parsedReels = rawPosts.map(p => ({
+          id: p.id,
+          title: p.title,
+          url: p.url,
+          thumbnail: p.thumbnail,
+          subreddit: p.subreddit,
+          originalUrl: p.permalink,
+          isRedgifs: true,
+        }));
 
-      if (restrictionActive) {
-        const kw = restrictionKeyword.toLowerCase().trim();
-        parsedReels = parsedReels.filter(v => {
-          const title = (v.title || '').toLowerCase();
-          const sub = (v.subreddit || '').toLowerCase();
-          return title.includes(kw) || sub.includes(kw);
+        if (restrictionActive) {
+          const kw = restrictionKeyword.toLowerCase().trim();
+          parsedReels = parsedReels.filter(v => {
+            const title = (v.title || '').toLowerCase();
+            const sub = (v.subreddit || '').toLowerCase();
+            return title.includes(kw) || sub.includes(kw);
+          });
+        }
+
+        setPage(data.nextPage || targetPage + 1);
+
+        setVideos(prev => {
+          if (reset) return parsedReels;
+          const existingIds = new Set(prev.map(v => v.id));
+          const unique = parsedReels.filter(v => !existingIds.has(v.id));
+          return [...prev, ...unique];
+        });
+      } else {
+        // Reddit API Provider Branch
+        const afterToken = reset ? '' : (redditAfter || '');
+        const targetSub = subreddits.length > 0
+          ? subreddits.join('+')
+          : 'nsfw_gifs+gifsex+AnalGifs+blowjobs+LegalTeens';
+
+        let url = `${BACKEND_API_URL}/api/reddit/${targetSub}?sort=hot${afterToken ? `&after=${afterToken}` : ''}`;
+        if (restrictionActive) {
+          url = `${BACKEND_API_URL}/api/search?q=${encodeURIComponent(restrictionKeyword)}${afterToken ? `&after=${afterToken}` : ''}`;
+        }
+
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const children = data?.data?.children || [];
+        const nextAfter = data?.data?.after || null;
+
+        let parsedReels = children
+          .map(child => child.data)
+          .filter(p => {
+            if (!p) return false;
+            const urlStr = p.url_overridden_by_dest || p.url || '';
+            return (
+              (p.is_video && p.media?.reddit_video?.fallback_url) ||
+              p.preview?.reddit_video_preview?.fallback_url ||
+              urlStr.includes('v.redd.it') ||
+              urlStr.includes('redgifs.com') ||
+              /\.(mp4|webm|m4v)(\?.*)?$/i.test(urlStr)
+            );
+          })
+          .map(p => {
+            let videoUrl = p.media?.reddit_video?.fallback_url ||
+                           p.preview?.reddit_video_preview?.fallback_url ||
+                           p.url_overridden_by_dest ||
+                           p.url;
+
+            if (videoUrl.includes('redgifs.com/watch/')) {
+              const id = videoUrl.split('/watch/')[1]?.split('?')[0];
+              if (id) videoUrl = `https://media.redgifs.com/${id}.mp4`;
+            }
+
+            return {
+              id: p.id,
+              title: p.title,
+              url: videoUrl,
+              thumbnail: p.thumbnail && p.thumbnail.startsWith('http') ? p.thumbnail : null,
+              subreddit: p.subreddit,
+              originalUrl: p.permalink,
+              isRedgifs: videoUrl.includes('redgifs.com')
+            };
+          });
+
+        if (restrictionActive) {
+          const kw = restrictionKeyword.toLowerCase().trim();
+          parsedReels = parsedReels.filter(v => {
+            const title = (v.title || '').toLowerCase();
+            const sub = (v.subreddit || '').toLowerCase();
+            return title.includes(kw) || sub.includes(kw);
+          });
+        }
+
+        setRedditAfter(nextAfter);
+
+        setVideos(prev => {
+          if (reset) return parsedReels;
+          const existingIds = new Set(prev.map(v => v.id));
+          const unique = parsedReels.filter(v => !existingIds.has(v.id));
+          return [...prev, ...unique];
         });
       }
-
-      setPage(data.nextPage || targetPage + 1);
-
-      setVideos(prev => {
-        if (reset) return parsedReels;
-        const existingIds = new Set(prev.map(v => v.id));
-        const unique = parsedReels.filter(v => !existingIds.has(v.id));
-        return [...prev, ...unique];
-      });
 
       if (reset) setError(null);
     } catch (err) {
@@ -93,14 +167,16 @@ export default function Reels({ subreddits = [] }) {
       setLoadingMore(false);
       fetchingRef.current = false;
     }
-  }, [subreddits, restrictionActive, restrictionKeyword, page]);
+  }, [sourceProvider, subreddits, restrictionActive, restrictionKeyword, page, redditAfter]);
 
-  // Reset and fetch when subreddits change
+  // Reset and fetch when subreddits or sourceProvider changes
   useEffect(() => {
     setVideos([]);
     setActiveVideoId(null);
+    setPage(1);
+    setRedditAfter(null);
     fetchReels(true);
-  }, [subreddits.join(',')]);
+  }, [sourceProvider, subreddits.join(',')]);
 
   // Intersection observer — track active video + load more
   useEffect(() => {
@@ -205,9 +281,43 @@ export default function Reels({ subreddits = [] }) {
 
   return (
     <div className="fixed inset-0 z-40 bg-black">
+      {/* Source Provider Switcher */}
+      <div className="absolute top-24 left-4 z-50 flex bg-black/70 backdrop-blur-md p-1 rounded-2xl border border-white/20 shadow-2xl">
+        <button
+          onClick={() => {
+            setSourceProvider('redgifs');
+            setVideos([]);
+            setActiveVideoId(null);
+            setPage(1);
+          }}
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            sourceProvider === 'redgifs'
+              ? 'bg-gradient-to-r from-neon-pink to-rose-500 text-white shadow-[0_0_15px_rgba(255,47,86,0.5)]'
+              : 'text-white/60 hover:text-white'
+          }`}
+        >
+          ✨ RedGIFs (First)
+        </button>
+        <button
+          onClick={() => {
+            setSourceProvider('reddit');
+            setVideos([]);
+            setActiveVideoId(null);
+            setRedditAfter(null);
+          }}
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+            sourceProvider === 'reddit'
+              ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.5)]'
+              : 'text-white/60 hover:text-white'
+          }`}
+        >
+          🤖 Reddit API
+        </button>
+      </div>
+
       {/* Restricted Alert Banner */}
       {restrictionActive && (
-        <div className="absolute top-24 left-4 z-50 bg-purple-950/80 backdrop-blur-md border border-purple-500/30 px-4 py-2.5 rounded-2xl flex items-center gap-2 text-xs font-bold text-purple-300 shadow-[0_0_15px_rgba(168,85,247,0.15)] max-w-[80vw] sm:max-w-md animate-pulse pointer-events-none">
+        <div className="absolute top-36 left-4 z-50 bg-purple-950/80 backdrop-blur-md border border-purple-500/30 px-4 py-2.5 rounded-2xl flex items-center gap-2 text-xs font-bold text-purple-300 shadow-[0_0_15px_rgba(168,85,247,0.15)] max-w-[80vw] sm:max-w-md animate-pulse pointer-events-none">
           <span>🔒</span>
           <span className="truncate">Restricted Feed Active: "{restrictionKeyword}"</span>
         </div>

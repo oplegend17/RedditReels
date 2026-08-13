@@ -95,88 +95,155 @@ export default function Females() {
   const restrictionActive = profile?.restrictionType === 'keyword' && profile?.restrictionKeyword;
   const restrictionKeyword = profile?.restrictionKeyword || '';
 
+  const [sourceProvider, setSourceProvider] = useState('redgifs'); // 'redgifs' (primary) | 'reddit'
   const [activeMood, setActiveMood] = useState(MOODS[0]);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [after, setAfter] = useState(null);
+  const [redditAfter, setRedditAfter] = useState(null);
+  const [redgifsPage, setRedgifsPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const loadMoreRef = useRef(null);
   const { isFavorite, addFavorite, removeFavorite } = useFavorites();
   const [playingId, setPlayingId] = useState(null);
   const [selectedAudio, setSelectedAudio] = useState(null);
 
-  const [page, setPage] = useState(1);
-
-  const fetchPosts = useCallback(async (mood, pageNum = 1, reset = false) => {
+  const fetchPosts = useCallback(async (mood, isReset = false) => {
     setLoading(true);
     setError(null);
     try {
-      let url = `${BACKEND}/api/redgifs/females?mood=${encodeURIComponent(mood.id)}&page=${pageNum}`;
-      if (restrictionActive) {
-        url = `${BACKEND}/api/redgifs/search?query=${encodeURIComponent(restrictionKeyword)}&page=${pageNum}`;
+      if (sourceProvider === 'redgifs') {
+        const pageToFetch = isReset ? 1 : redgifsPage;
+        let url = `${BACKEND}/api/redgifs/females?mood=${encodeURIComponent(mood.id)}&page=${pageToFetch}`;
+        if (restrictionActive) {
+          url = `${BACKEND}/api/redgifs/search?query=${encodeURIComponent(restrictionKeyword)}&page=${pageToFetch}`;
+        }
+
+        const res = await fetch(url);
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}));
+          throw new Error(d.error || 'Failed to load RedGIFs content');
+        }
+        const data = await res.json();
+        const rawPosts = data.posts || [];
+
+        let mapped = rawPosts.map(p => ({
+          id: p.id,
+          title: p.title,
+          author: p.author,
+          ups: p.ups,
+          url: p.url,
+          thumbnail: p.thumbnail,
+          subreddit: p.subreddit,
+          type: 'video',
+          isRedgifs: true,
+        }));
+
+        if (restrictionActive) {
+          const kw = restrictionKeyword.toLowerCase().trim();
+          mapped = mapped.filter(p => {
+            const title = (p.title || '').toLowerCase();
+            const sub = (p.subreddit || '').toLowerCase();
+            const urlStr = (p.url || '').toLowerCase();
+            return title.includes(kw) || sub.includes(kw) || urlStr.includes(kw);
+          });
+        }
+
+        setHasMore(data.hasMore ?? (mapped.length > 0));
+        setRedgifsPage(data.nextPage || pageToFetch + 1);
+        setPosts(prev => isReset ? mapped : [...prev, ...mapped]);
+
+      } else {
+        // Reddit API Provider Branch
+        const afterToken = isReset ? '' : (redditAfter || '');
+        const targetSub = mood.subreddits ? mood.subreddits.join('+') : 'ladybonersgw+MenGW';
+        let url = `${BACKEND}/api/reddit/${targetSub}?sort=hot${afterToken ? `&after=${afterToken}` : ''}`;
+        
+        if (restrictionActive) {
+          url = `${BACKEND}/api/search?q=${encodeURIComponent(restrictionKeyword)}${afterToken ? `&after=${afterToken}` : ''}`;
+        }
+
+        const res = await fetch(url);
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}));
+          throw new Error(d.error || 'Failed to load Reddit content');
+        }
+        const data = await res.json();
+        const children = data?.data?.children || [];
+        const nextAfter = data?.data?.after || null;
+
+        let mapped = children
+          .map(child => child.data)
+          .filter(p => p && (p.url || p.url_overridden_by_dest))
+          .map(p => {
+            let videoUrl = p.media?.reddit_video?.fallback_url ||
+                           p.preview?.reddit_video_preview?.fallback_url ||
+                           p.url_overridden_by_dest ||
+                           p.url;
+
+            if (videoUrl.includes('redgifs.com/watch/')) {
+              const id = videoUrl.split('/watch/')[1]?.split('?')[0];
+              if (id) videoUrl = `https://media.redgifs.com/${id}.mp4`;
+            }
+
+            const isAudioPost = mood.isAudio || (p.domain && p.domain.includes('soundgasm')) || (p.subreddit && p.subreddit.toLowerCase() === 'gonewildaudio');
+
+            return {
+              id: p.id,
+              title: p.title,
+              author: p.author,
+              ups: p.ups,
+              url: videoUrl,
+              thumbnail: p.thumbnail && p.thumbnail.startsWith('http') ? p.thumbnail : null,
+              subreddit: p.subreddit,
+              type: isAudioPost ? 'audio' : (p.is_video || videoUrl.includes('.mp4') || videoUrl.includes('v.redd.it') || videoUrl.includes('redgifs') ? 'video' : 'image'),
+              isRedgifs: videoUrl.includes('redgifs.com'),
+              isAudio: isAudioPost,
+              permalink: p.permalink
+            };
+          });
+
+        if (restrictionActive) {
+          const kw = restrictionKeyword.toLowerCase().trim();
+          mapped = mapped.filter(p => {
+            const title = (p.title || '').toLowerCase();
+            const sub = (p.subreddit || '').toLowerCase();
+            return title.includes(kw) || sub.includes(kw);
+          });
+        }
+
+        setRedditAfter(nextAfter);
+        setHasMore(!!nextAfter);
+        setPosts(prev => isReset ? mapped : [...prev, ...mapped]);
       }
-
-      const res = await fetch(url);
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || 'Failed to load RedGIFs');
-      }
-      const data = await res.json();
-      const rawPosts = data.posts || [];
-
-      let mapped = rawPosts.map(p => ({
-        id: p.id,
-        title: p.title,
-        author: p.author,
-        ups: p.ups,
-        url: p.url,
-        thumbnail: p.thumbnail,
-        subreddit: p.subreddit,
-        type: 'video',
-        isRedgifs: true,
-      }));
-
-      // Enforce strict client-side keyword restrict filter
-      if (restrictionActive) {
-        const kw = restrictionKeyword.toLowerCase().trim();
-        mapped = mapped.filter(p => {
-          const title = (p.title || '').toLowerCase();
-          const sub = (p.subreddit || '').toLowerCase();
-          const urlStr = (p.url || '').toLowerCase();
-          return title.includes(kw) || sub.includes(kw) || urlStr.includes(kw);
-        });
-      }
-
-      setHasMore(data.hasMore ?? false);
-      setPage(data.nextPage || pageNum + 1);
-      setPosts(prev => reset ? mapped : [...prev, ...mapped]);
     } catch (err) {
+      console.error('Females fetch error:', err);
       setError(err.message || 'Failed to load posts');
     } finally {
       setLoading(false);
     }
-  }, [restrictionActive, restrictionKeyword]);
+  }, [sourceProvider, redgifsPage, redditAfter, restrictionActive, restrictionKeyword]);
 
   useEffect(() => {
     setPosts([]);
-    setAfter(null);
+    setRedgifsPage(1);
+    setRedditAfter(null);
     setHasMore(true);
     setPlayingId(null);
     setSelectedAudio(null);
-    fetchPosts(activeMood, null, true);
-  }, [activeMood, fetchPosts]);
+    fetchPosts(activeMood, true);
+  }, [sourceProvider, activeMood]);
 
   // Infinite scroll
   useEffect(() => {
     const obs = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && !loading && hasMore) {
-        fetchPosts(activeMood, after);
+        fetchPosts(activeMood, false);
       }
     }, { rootMargin: '300px' });
     if (loadMoreRef.current) obs.observe(loadMoreRef.current);
     return () => obs.disconnect();
-  }, [loading, hasMore, after, activeMood, fetchPosts]);
+  }, [loading, hasMore, activeMood, fetchPosts]);
 
   const handleFav = async (e, post) => {
     e.stopPropagation();
@@ -206,7 +273,7 @@ export default function Females() {
       )}
 
       {/* Hero */}
-      <div className="relative mb-8 rounded-3xl overflow-hidden bg-gradient-to-br from-rose-950/40 via-black to-purple-950/40 border border-white/10 p-8">
+      <div className="relative mb-8 rounded-3xl overflow-hidden bg-gradient-to-br from-rose-950/40 via-black to-purple-950/40 border border-white/10 p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(244,63,94,0.15),_transparent_60%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_rgba(168,85,247,0.1),_transparent_60%)]" />
         <div className="relative z-10">
@@ -216,6 +283,30 @@ export default function Females() {
           <p className="text-white/50 text-sm max-w-lg">
             Hot men, big energy, her pleasure — content curated from the female gaze.
           </p>
+        </div>
+
+        {/* Source Provider Switcher */}
+        <div className="relative z-10 flex bg-white/10 p-1 rounded-2xl border border-white/15 shrink-0 self-start sm:self-center">
+          <button
+            onClick={() => { setSourceProvider('redgifs'); setRedgifsPage(1); setPosts([]); }}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              sourceProvider === 'redgifs'
+                ? 'bg-gradient-to-r from-neon-pink to-rose-500 text-white shadow-lg shadow-neon-pink/30'
+                : 'text-white/50 hover:text-white'
+            }`}
+          >
+            ✨ RedGIFs (First)
+          </button>
+          <button
+            onClick={() => { setSourceProvider('reddit'); setRedditAfter(null); setPosts([]); }}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              sourceProvider === 'reddit'
+                ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg shadow-orange-500/30'
+                : 'text-white/50 hover:text-white'
+            }`}
+          >
+            🤖 Reddit API
+          </button>
         </div>
       </div>
 
