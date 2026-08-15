@@ -266,6 +266,116 @@ Return ONLY valid JSON. No explanation, no markdown.`,
   }
 });
 
+// ── Random NSFW Meme Endpoint (GET /api/memes/random & GET /api/reddit/random-nsfw) ──
+const DEFAULT_MEME_SUBS = ['NSFWMemes', 'hentaimemes', 'NSFWMeme', 'PornoMemes'];
+
+async function handleRandomMemeRequest(req, res) {
+  try {
+    // 1. API Key Authentication (Optional for security, checked against process.env.MEME_API_KEY)
+    const configuredApiKey = process.env.MEME_API_KEY || process.env.API_KEY;
+    const providedApiKey = req.headers['x-api-key'] || req.query.api_key || req.headers['x-auth-token'];
+
+    if (configuredApiKey) {
+      if (!providedApiKey || providedApiKey !== configuredApiKey) {
+        return res.status(401).json({
+          success: false,
+          error: "Unauthorized: Invalid or missing API key in 'x-api-key' header."
+        });
+      }
+    }
+
+    // 2. Determine target subreddits
+    const customSub = req.query.subreddit || req.query.sub;
+    let targetSubreddits = DEFAULT_MEME_SUBS;
+    
+    if (customSub) {
+      targetSubreddits = customSub.split(',').map(s => s.trim().replace(/^r\//i, '')).filter(Boolean);
+    }
+
+    const subString = targetSubreddits.join('+');
+    const token = await getRedditAccessToken();
+    const headers = buildHeaders(token);
+    const redditUrl = token
+      ? `https://oauth.reddit.com/r/${subString}/hot?limit=100`
+      : `https://www.reddit.com/r/${subString}/hot.json?limit=100`;
+
+    const response = await fetch(redditUrl, { headers });
+    if (!response.ok) {
+      return res.status(response.status).json({
+        success: false,
+        error: `Reddit API returned HTTP ${response.status}`
+      });
+    }
+
+    const data = await response.json();
+    const posts = (data?.data?.children || [])
+      .map(child => child?.data)
+      .filter(p => {
+        if (!p || p.stickied || p.is_self) return false;
+        const u = p.url_overridden_by_dest || p.url || '';
+        return (
+          (p.is_video && p.media?.reddit_video?.fallback_url) ||
+          p.preview?.reddit_video_preview?.fallback_url ||
+          u.includes('i.redd.it') ||
+          u.includes('v.redd.it') ||
+          u.includes('redgifs.com') ||
+          u.includes('imgur.com') ||
+          /\.(jpg|jpeg|png|gif|mp4|webm)(\?.*)?$/i.test(u)
+        );
+      });
+
+    if (posts.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: "No meme media found matching query."
+      });
+    }
+
+    // Pick random post
+    const randomPost = posts[Math.floor(Math.random() * posts.length)];
+
+    let mediaUrl = randomPost.media?.reddit_video?.fallback_url ||
+                   randomPost.preview?.reddit_video_preview?.fallback_url ||
+                   randomPost.url_overridden_by_dest ||
+                   randomPost.url;
+
+    if (mediaUrl.includes('redgifs.com/watch/')) {
+      const id = mediaUrl.split('/watch/')[1]?.split('?')[0];
+      if (id) mediaUrl = `https://media.redgifs.com/${id}.mp4`;
+    }
+
+    let mediaType = "image";
+    if (randomPost.is_video || mediaUrl.includes('v.redd.it') || mediaUrl.includes('redgifs') || /\.mp4|\.webm/i.test(mediaUrl)) {
+      mediaType = "video";
+    } else if (/\.gif/i.test(mediaUrl) || mediaUrl.includes('gfycat')) {
+      mediaType = "gif";
+    }
+
+    const permalink = randomPost.permalink 
+      ? (randomPost.permalink.startsWith('http') ? randomPost.permalink : `https://reddit.com${randomPost.permalink}`)
+      : `https://reddit.com/r/${randomPost.subreddit}`;
+
+    res.json({
+      success: true,
+      title: randomPost.title || "NSFW Meme",
+      url: mediaUrl,
+      permalink: permalink,
+      subreddit: randomPost.subreddit,
+      isNsfw: randomPost.over_18 ?? true,
+      mediaType: mediaType
+    });
+  } catch (err) {
+    console.error("❌ Random Meme API error:", err.message);
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
+  }
+}
+
+app.get("/api/memes/random", handleRandomMemeRequest);
+app.get("/api/reddit/random-nsfw", handleRandomMemeRequest);
+
 // Default subreddit route (uses OAuth with public fallback)
 app.get("/api/reddit", async (req, res) => {
   try {
@@ -1075,4 +1185,5 @@ app.get("/api/redgifs/:id", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ Proxy server running at http://localhost:${PORT}`);
 });
+
 
