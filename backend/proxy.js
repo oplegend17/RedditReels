@@ -971,10 +971,32 @@ app.get("/api/redgifs/search", async (req, res) => {
   }
 });
 
+function getCachedRedgifs(key) {
+  const item = redgifsCache.get(key);
+  if (!item) return null;
+  if (Date.now() - (item.timestamp || item.time) > 2 * 60 * 1000) {
+    redgifsCache.delete(key);
+    return null;
+  }
+  return item.data;
+}
+
+function setCachedRedgifs(key, data) {
+  redgifsCache.set(key, { data, timestamp: Date.now(), time: Date.now() });
+}
+
 // Endpoint: Trending RedGIFs clips
 app.get("/api/redgifs/trending", async (req, res) => {
   try {
     const { count = '30', page = '1', order = 'trending' } = req.query;
+    const cacheKey = `trending_${order}_${page}_${count}`;
+
+    const cached = getCachedRedgifs(cacheKey);
+    if (cached) {
+      console.log(`⚡ [RedGIFs Cache Hit] Serving cached "${order}" page ${page}`);
+      return res.json(cached);
+    }
+
     let token = await getRedgifsAccessToken();
 
     console.log(`🔥 [RedGIFs API Trending] Order: "${order}" | Page: ${page}`);
@@ -1013,14 +1035,20 @@ app.get("/api/redgifs/trending", async (req, res) => {
 
     const posts = rawGifs.map(normalizeRedgifsItem).filter(p => p.url);
 
-    res.json({
+    const result = {
       posts,
       page: data.page || Number(page),
       pages: data.pages || 1,
       total: data.total || posts.length,
       hasMore: posts.length > 0,
       nextPage: (data.page || Number(page)) + 1
-    });
+    };
+
+    if (posts.length > 0 && response.ok) {
+      setCachedRedgifs(cacheKey, result);
+    }
+
+    res.json(result);
   } catch (err) {
     console.error("❌ RedGifs Trending Error:", err.message);
     res.status(500).json({ error: err.message });

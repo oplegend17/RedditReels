@@ -214,28 +214,27 @@ export default function Layout({ profile, isAdmin }) {
       )}
 
       {/* ── Desktop / tablet header ── */}
-      <header className={`fixed top-0 inset-x-0 z-50 glass-panel border-b-0 rounded-none
+      <header className={`fixed top-0 inset-x-0 z-50 bg-[#0b0c10]/90 backdrop-blur-md border-b border-white/10
         transition-transform duration-300 ${showNav ? 'translate-y-0' : '-translate-y-full'}`}>
-        <div className="max-w-[1800px] mx-auto px-4 md:px-6 h-16 md:h-18 flex items-center justify-between gap-4">
+        <div className="max-w-[1800px] mx-auto px-4 md:px-6 h-16 flex items-center justify-between gap-4">
 
           <Link to="/"
-            className="text-xl md:text-2xl font-black tracking-tighter italic
-              bg-clip-text text-transparent bg-gradient-to-r from-white via-neon-blue to-neon-pink shrink-0"
+            className="flex items-center gap-2 text-lg md:text-xl font-black tracking-tight shrink-0"
             aria-label="Reddit Reels home">
-            REDDIT REELS
+            <span className="w-7 h-7 rounded-lg bg-neon-pink flex items-center justify-center text-white font-black text-xs shadow-md">RR</span>
+            <span className="text-white font-extrabold tracking-wider">REDDIT <span className="text-neon-pink">REELS</span></span>
           </Link>
 
-          <nav className="hidden md:flex items-center gap-0.5 bg-black/20 px-1.5 py-1.5 rounded-full
-            border border-white/5 backdrop-blur-md overflow-x-auto no-scrollbar" aria-label="Main navigation">
-            {allItems.map(item => {
+          {/* Primary Navigation — Clean, restrained text/icon tabs */}
+          <nav className="hidden md:flex items-center gap-1" aria-label="Main navigation">
+            {navItems.map(item => {
               const active = isActive(item.path);
               return (
                 <Link key={item.path} to={item.path}
-                  className={`flex items-center gap-1.5 px-3.5 py-2 rounded-full text-sm font-semibold
-                    whitespace-nowrap transition-all duration-200
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs md:text-sm font-semibold transition-all duration-150
                     ${active
-                      ? 'bg-white text-black shadow-[0_0_16px_rgba(255,255,255,0.25)]'
-                      : 'text-white/50 hover:text-white hover:bg-white/5'}`}
+                      ? 'bg-white/10 text-white font-bold border border-white/15'
+                      : 'text-white/60 hover:text-white hover:bg-white/5'}`}
                   aria-current={active ? 'page' : undefined}>
                   {item.icon}
                   <span>{item.label}</span>
@@ -244,14 +243,14 @@ export default function Layout({ profile, isAdmin }) {
             })}
           </nav>
 
-          {/* Watch party header controls */}
+          {/* Secondary Controls & Party Actions */}
           <div className="hidden md:flex items-center gap-2">
             {status === 'idle' ? (
-              <>
+              <div className="flex items-center gap-1.5 bg-white/5 p-1 rounded-lg border border-white/10">
                 <button
                   type="button"
                   onClick={handleCreateHostParty}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-neon-pink/15 border border-neon-pink/30 hover:bg-neon-pink text-white text-xs font-bold transition-all shadow-[0_0_12px_rgba(255,47,86,0.25)] cursor-pointer">
+                  className="flex items-center gap-1 px-3 py-1 rounded-md bg-neon-pink hover:bg-neon-pink/80 text-white text-xs font-bold transition-all cursor-pointer">
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
                   </svg>
@@ -260,23 +259,28 @@ export default function Layout({ profile, isAdmin }) {
                 <button
                   type="button"
                   onClick={() => setShowJoinModal(true)}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/15 hover:bg-white/15 text-white text-xs font-bold transition-all cursor-pointer">
-                  <svg className="w-3.5 h-3.5 text-neon-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  Join Party
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-md hover:bg-white/10 text-white/70 hover:text-white text-xs font-semibold transition-all cursor-pointer">
+                  Join
                 </button>
-              </>
+              </div>
             ) : null}
 
+            {isAdmin && (
+              <Link to="/admin"
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                  isActive('/admin')
+                    ? 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40'
+                    : 'bg-white/5 border-white/10 text-yellow-400/80 hover:text-yellow-300 hover:bg-white/10'
+                }`}>
+                <span>👑</span>
+                <span>Admin</span>
+              </Link>
+            )}
+
             <button
-              className="flex items-center gap-2 px-4 py-2 rounded-full border border-white/15
-                text-white/70 text-sm font-medium hover:bg-white/8 hover:text-white transition-all shrink-0"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10
+                text-white/60 text-xs font-semibold hover:bg-white/10 hover:text-white transition-all shrink-0"
               onClick={() => auth.signOut()}>
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"
-                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
               Sign out
             </button>
           </div>

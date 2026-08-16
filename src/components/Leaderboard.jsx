@@ -41,30 +41,30 @@ export default function Leaderboard({ currentStats }) {
   const topScores = leaderboardData.slice(0, 10);
 
   return (
-    <div className="max-w-4xl mx-auto p-8">
+    <div className="max-w-4xl mx-auto p-4 sm:p-6 pb-20">
       {/* Header */}
-      <div className="mb-8 text-center">
-        <h2 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-500 via-orange-500 to-red-500 mb-2 flex items-center justify-center gap-4">
-          <div className="w-12 h-12 text-yellow-500">{getIcon('trophy')}</div>
-          Leaderboard
-        </h2>
-        <p className="text-white/60">
-          Top performers across all challenges
+      <div className="mb-6">
+        <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight flex items-center gap-2">
+          <span>🏆</span>
+          <span>Leaderboard</span>
+        </h1>
+        <p className="text-white/40 text-xs mt-0.5">
+          Top performers across all platform challenges
         </p>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col md:flex-row gap-4 mb-8">
+      <div className="flex flex-col sm:flex-row gap-3 mb-6 items-center justify-between">
         {/* Time Filter */}
-        <div className="flex gap-2">
+        <div className="flex gap-1.5 bg-white/5 p-1 rounded-lg border border-white/10 w-full sm:w-auto">
           {['all', 'week', 'month'].map(filter => (
             <button
               key={filter}
               onClick={() => setTimeFilter(filter)}
-              className={`px-4 py-2 rounded-full text-sm font-bold transition-all duration-300 ${
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all duration-150 cursor-pointer flex-1 sm:flex-none ${
                 timeFilter === filter
-                  ? 'bg-neon-blue text-black shadow-[0_0_20px_rgba(0,243,255,0.4)]'
-                  : 'bg-white/10 text-white/60 hover:bg-white/20'
+                  ? 'bg-white/15 text-white font-bold border border-white/20'
+                  : 'text-white/50 hover:text-white hover:bg-white/5'
               }`}
             >
               {filter === 'all' ? 'All Time' : filter === 'week' ? 'This Week' : 'This Month'}
@@ -76,20 +76,20 @@ export default function Leaderboard({ currentStats }) {
         <select
           value={challengeFilter}
           onChange={(e) => setChallengeFilter(e.target.value)}
-          className="px-4 py-2 rounded-full bg-white/10 text-white font-bold outline-none cursor-pointer border border-white/20"
+          className="px-3 py-1.5 rounded-lg bg-white/5 text-white text-xs font-semibold outline-none cursor-pointer border border-white/10 w-full sm:w-auto"
         >
-          <option value="all" className="bg-black">All Challenges</option>
-          <option value="tryNotToCum" className="bg-black">Try Not to Cum</option>
-          <option value="enduranceRun" className="bg-black">Endurance Run</option>
-          <option value="roulette" className="bg-black">Roulette</option>
-          <option value="tenMinute" className="bg-black">10 Minute</option>
-          <option value="rapidFire" className="bg-black">Rapid Fire</option>
-          <option value="noControl" className="bg-black">No Control</option>
+          <option value="all" className="bg-[#15171e]">All Challenges</option>
+          <option value="tryNotToCum" className="bg-[#15171e]">Try Not to Cum</option>
+          <option value="enduranceRun" className="bg-[#15171e]">Endurance Run</option>
+          <option value="roulette" className="bg-[#15171e]">Roulette</option>
+          <option value="tenMinute" className="bg-[#15171e]">10 Minute</option>
+          <option value="rapidFire" className="bg-[#15171e]">Rapid Fire</option>
+          <option value="noControl" className="bg-[#15171e]">No Control</option>
         </select>
       </div>
 
       {/* Leaderboard Table */}
-      <div className="glass-panel rounded-2xl overflow-hidden border border-white/10">
+      <div className="bg-[#15171e] rounded-xl overflow-hidden border border-white/10 shadow-xl">
         {isLoading ? (
           <div className="p-12 flex justify-center">
             <div className="w-8 h-8 border-4 border-neon-pink border-t-transparent rounded-full animate-spin"></div>

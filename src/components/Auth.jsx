@@ -71,63 +71,62 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Background — static, no pulse */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-neon-pink/15 rounded-full blur-[100px] opacity-100 pointer-events-none" />
-      <div className="absolute bottom-0 right-0 w-[400px] h-[400px] bg-neon-blue/8 rounded-full blur-[80px] opacity-100 pointer-events-none" />
-
-      <div className="w-full max-w-md p-8 md:p-10 glass-panel rounded-3xl relative z-10 animate-in fade-in zoom-in-95 duration-500">
-        <div className="text-center mb-10">
-          <h1 className="text-4xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-white via-neon-blue to-neon-pink mb-2 drop-shadow-lg">
-            {isSignUp ? 'JOIN THE CLUB' : 'WELCOME BACK'}
+    <div className="min-h-screen flex items-center justify-center p-4 relative">
+      <div className="w-full max-w-md p-6 sm:p-8 bg-[#15171e] border border-white/10 rounded-xl shadow-xl relative z-10">
+        <div className="text-center mb-8">
+          <div className="w-10 h-10 rounded-lg bg-neon-pink text-white font-black flex items-center justify-center text-sm mx-auto mb-3">
+            RR
+          </div>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white mb-1">
+            {isSignUp ? 'Create an Account' : 'Welcome Back'}
           </h1>
-          <p className="text-neutral-400 font-medium">
+          <p className="text-white/40 text-xs font-medium">
             {isSignUp ? 'Create your account to start watching' : 'Sign in to continue your session'}
           </p>
         </div>
 
-        <form onSubmit={handleAuth} className="space-y-6">
-          <div className="space-y-4">
-            <div className="group">
-              <label className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1.5 ml-1">Email</label>
+        <form onSubmit={handleAuth} className="space-y-4">
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-semibold text-white/60 mb-1">Email</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full px-5 py-4 bg-black/40 border border-white/10 rounded-xl text-white placeholder-neutral-600 focus:outline-none focus:border-neon-blue focus:ring-1 focus:ring-neon-blue/50 transition-all duration-300"
+                className="w-full px-3.5 py-2.5 bg-black/40 border border-white/10 rounded-lg text-white text-xs placeholder-white/30 focus:outline-none focus:border-white/30 transition-all"
                 placeholder="name@example.com"
               />
             </div>
 
             {isSignUp && (
-              <div className="group animate-in slide-in-from-top-2 fade-in">
-                <label className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1.5 ml-1">Username</label>
+              <div>
+                <label className="block text-xs font-semibold text-white/60 mb-1">Username</label>
                 <input
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full px-5 py-4 bg-black/40 border border-white/10 rounded-xl text-white placeholder-neutral-600 focus:outline-none focus:border-neon-blue focus:ring-1 focus:ring-neon-blue/50 transition-all duration-300"
+                  className="w-full px-3.5 py-2.5 bg-black/40 border border-white/10 rounded-lg text-white text-xs placeholder-white/30 focus:outline-none focus:border-white/30 transition-all"
                   placeholder="Choose a username"
                 />
               </div>
             )}
 
-            <div className="group relative">
-              <label className="block text-xs font-bold text-neutral-400 uppercase tracking-wider mb-1.5 ml-1">Password</label>
+            <div>
+              <label className="block text-xs font-semibold text-white/60 mb-1">Password</label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="w-full px-5 py-4 pr-20 bg-black/40 border border-white/10 rounded-xl text-white placeholder-neutral-600 focus:outline-none focus:border-neon-blue focus:ring-1 focus:ring-neon-blue/50 transition-all duration-200"
+                  className="w-full px-3.5 py-2.5 pr-14 bg-black/40 border border-white/10 rounded-lg text-white text-xs placeholder-white/30 focus:outline-none focus:border-white/30 transition-all"
                   placeholder="••••••••"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-white text-xs font-bold uppercase tracking-wider transition-colors px-1 py-1"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white text-xs font-semibold"
                 >
                   {showPassword ? 'Hide' : 'Show'}
                 </button>
@@ -136,13 +135,13 @@ export default function Auth() {
           </div>
 
           {errorMsg && (
-            <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-200 text-sm font-medium text-center animate-in slide-in-from-top-2">
+            <div className="p-3 bg-red-950/80 border border-red-500/30 rounded-lg text-red-200 text-xs font-medium text-center">
               {errorMsg}
             </div>
           )}
 
           {successMsg && (
-            <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl text-green-200 text-sm font-medium text-center animate-in slide-in-from-top-2">
+            <div className="p-3 bg-emerald-950/80 border border-emerald-500/30 rounded-lg text-emerald-200 text-xs font-medium text-center">
               {successMsg}
             </div>
           )}
@@ -150,11 +149,11 @@ export default function Auth() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-4 bg-neon-pink hover:bg-red-600 text-white rounded-xl font-bold text-lg shadow-[0_0_20px_rgba(255,47,86,0.3)] hover:shadow-[0_0_30px_rgba(255,47,86,0.5)] hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 mt-4"
+            className="w-full py-2.5 bg-neon-pink hover:bg-neon-pink/80 text-white rounded-lg font-bold text-xs transition-all cursor-pointer disabled:opacity-50 mt-2"
           >
             {loading ? (
               <div className="flex items-center justify-center gap-2">
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 <span>Processing...</span>
               </div>
             ) : (
@@ -163,14 +162,14 @@ export default function Auth() {
           </button>
         </form>
 
-        <div className="mt-8 text-center">
+        <div className="mt-6 text-center">
           <button
             onClick={() => {
               setIsSignUp(!isSignUp);
               setErrorMsg('');
               setSuccessMsg('');
             }}
-            className="text-neutral-400 hover:text-white text-sm font-medium transition-colors duration-300 underline decoration-neutral-700 underline-offset-4 hover:decoration-white"
+            className="text-white/50 hover:text-white text-xs font-medium transition-colors"
           >
             {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
           </button>

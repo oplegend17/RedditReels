@@ -167,45 +167,42 @@ export default function UserProfile({ user }) {
     <div className="max-w-4xl mx-auto pb-20">
 
       {/* Hero */}
-      <div className="relative rounded-3xl overflow-hidden mb-6 bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(255,47,86,0.15),_transparent_60%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(0,243,255,0.1),_transparent_60%)]" />
-
-        <div className="relative z-10 p-8 flex flex-col sm:flex-row items-center sm:items-end gap-6">
+      <div className="bg-[#15171e] rounded-xl overflow-hidden border border-white/10 mb-6 p-6">
+        <div className="flex flex-col sm:flex-row items-center sm:items-end gap-6">
           {/* Avatar */}
           <div className="relative shrink-0">
-            <div className="w-24 h-24 rounded-2xl overflow-hidden border-2 border-white/20 shadow-2xl">
+            <div className="w-20 h-20 rounded-xl overflow-hidden border border-white/20 shadow-md">
               {avatarUrl ? (
                 <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full bg-gradient-to-br from-neon-pink/40 to-neon-blue/40 flex items-center justify-center text-4xl font-black text-white">
+                <div className="w-full h-full bg-white/10 flex items-center justify-center text-3xl font-black text-white">
                   {username?.[0]?.toUpperCase() || '?'}
                 </div>
               )}
             </div>
             {/* Level badge */}
-            <div className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-neon-pink flex items-center justify-center text-xs font-black text-white shadow-lg shadow-neon-pink/40">
+            <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-neon-pink flex items-center justify-center text-[10px] font-extrabold text-white shadow-md">
               {level}
             </div>
           </div>
 
           {/* Info */}
           <div className="flex-1 text-center sm:text-left min-w-0 max-w-full overflow-hidden">
-            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight truncate max-w-full" title={username}>{username}</h1>
-            <p className="text-white/40 text-xs sm:text-sm mt-0.5 truncate max-w-full" title={user.email}>{user.email}</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight truncate max-w-full" title={username}>{username}</h1>
+            <p className="text-white/40 text-xs mt-0.5 truncate max-w-full" title={user.email}>{user.email}</p>
             {joinDate && (
-              <p className="text-white/30 text-[11px] sm:text-xs mt-1 truncate max-w-full">Member since {joinDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
+              <p className="text-white/30 text-[11px] mt-0.5 truncate max-w-full">Member since {joinDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
             )}
 
             {/* XP bar */}
-            <div className="mt-3 max-w-xs mx-auto sm:mx-0">
-              <div className="flex justify-between text-xs text-white/40 mb-1">
+            <div className="mt-2.5 max-w-xs mx-auto sm:mx-0">
+              <div className="flex justify-between text-[11px] text-white/40 mb-1">
                 <span>Level {level}</span>
                 <span>{xp.toLocaleString()} XP · {Math.round(levelProgress)}% to {level + 1}</span>
               </div>
               <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
                 <div
-                  className="h-full rounded-full bg-gradient-to-r from-neon-pink to-neon-blue transition-all duration-700"
+                  className="h-full rounded-full bg-neon-pink transition-all duration-700"
                   style={{ width: `${levelProgress}%` }}
                 />
               </div>
@@ -213,35 +210,35 @@ export default function UserProfile({ user }) {
           </div>
 
           {/* Quick stats */}
-          <div className="flex gap-3 shrink-0">
+          <div className="flex gap-4 shrink-0 bg-white/5 p-3 rounded-lg border border-white/10">
             <div className="text-center">
-              <p className="text-2xl font-black text-white">{unlockedCount}</p>
-              <p className="text-[10px] text-white/40">Achievements</p>
+              <p className="text-lg font-extrabold text-white">{unlockedCount}</p>
+              <p className="text-[10px] text-white/40 font-semibold">Achievements</p>
             </div>
             <div className="w-px bg-white/10" />
             <div className="text-center">
-              <p className="text-2xl font-black text-white">{seenIds.size}</p>
-              <p className="text-[10px] text-white/40">Watched</p>
+              <p className="text-lg font-extrabold text-white">{seenIds.size}</p>
+              <p className="text-[10px] text-white/40 font-semibold">Watched</p>
             </div>
             <div className="w-px bg-white/10" />
             <div className="text-center">
-              <p className="text-2xl font-black text-white">{favorites.length}</p>
-              <p className="text-[10px] text-white/40">Saved</p>
+              <p className="text-lg font-extrabold text-white">{favorites.length}</p>
+              <p className="text-[10px] text-white/40 font-semibold">Saved</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Tabs — scrollable horizontal row with clean padding */}
-      <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10 mb-6 overflow-x-auto no-scrollbar gap-1">
+      {/* Tabs */}
+      <div className="flex bg-white/5 p-1 rounded-lg border border-white/10 mb-6 overflow-x-auto no-scrollbar gap-1">
         {TABS.map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`shrink-0 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all duration-200 ${
+            className={`shrink-0 px-3.5 py-1.5 rounded-md text-xs font-semibold whitespace-nowrap transition-all duration-150 cursor-pointer ${
               activeTab === tab
-                ? 'bg-white text-black shadow-md'
-                : 'text-white/40 hover:text-white hover:bg-white/5'
+                ? 'bg-white/15 text-white font-bold border border-white/20'
+                : 'text-white/50 hover:text-white hover:bg-white/5'
             }`}
           >
             {tab}

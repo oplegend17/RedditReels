@@ -537,14 +537,14 @@ export default function VideoGallery() {
         )}
 
         {/* Browse / search bar — cohesive control strip */}
-        <div className="glass-panel p-2 rounded-2xl flex flex-wrap items-center gap-2 w-full md:w-fit mx-auto">
+        <div className="bg-[#15171e] p-1.5 rounded-xl flex flex-wrap items-center gap-2 w-full md:w-fit mx-auto border border-white/10 shadow-lg">
           {/* Content Source Provider Switcher */}
-          <div className="flex items-center bg-black/40 p-1 rounded-xl border border-white/10 shrink-0">
+          <div className="flex items-center bg-black/40 p-1 rounded-lg border border-white/10 shrink-0">
             <button
               onClick={() => { setSourceProvider('reddit'); setSelectedRedgifsTag(null); setVideos([]); }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+              className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
                 sourceProvider === 'reddit'
-                  ? 'bg-neon-pink text-white shadow-[0_0_10px_rgba(255,47,86,0.4)]'
+                  ? 'bg-neon-pink text-white'
                   : 'text-neutral-400 hover:text-white'
               }`}
             >
@@ -552,9 +552,9 @@ export default function VideoGallery() {
             </button>
             <button
               onClick={() => { setSourceProvider('redgifs'); setSelectedRedgifsTag(null); setVideos([]); }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+              className={`px-3 py-1 rounded-md text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
                 sourceProvider === 'redgifs'
-                  ? 'bg-gradient-to-r from-red-600 to-neon-pink text-white shadow-[0_0_10px_rgba(255,47,86,0.4)]'
+                  ? 'bg-red-600 text-white'
                   : 'text-neutral-400 hover:text-white'
               }`}
             >
@@ -565,12 +565,12 @@ export default function VideoGallery() {
 
           {/* 🔥 Trending Order Switcher (RedGIFs Mode) */}
           {sourceProvider === 'redgifs' && (
-            <div className="flex items-center bg-black/50 p-1 rounded-xl border border-white/15 shrink-0">
+            <div className="flex items-center bg-black/40 p-1 rounded-lg border border-white/10 shrink-0">
               <button
                 onClick={() => { setSortOrder('trending'); fetchVideos(true); }}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 ${
                   sortOrder === 'trending'
-                    ? 'bg-gradient-to-r from-red-600 to-neon-pink text-white shadow-[0_0_10px_rgba(239,68,68,0.4)]'
+                    ? 'bg-white/15 text-white font-bold'
                     : 'text-neutral-400 hover:text-white'
                 }`}
               >
@@ -578,9 +578,9 @@ export default function VideoGallery() {
               </button>
               <button
                 onClick={() => { setSortOrder('best'); fetchVideos(true); }}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 ${
                   sortOrder === 'best'
-                    ? 'bg-amber-600 text-white shadow-[0_0_10px_rgba(245,158,11,0.4)]'
+                    ? 'bg-white/15 text-white font-bold'
                     : 'text-neutral-400 hover:text-white'
                 }`}
               >
@@ -588,9 +588,9 @@ export default function VideoGallery() {
               </button>
               <button
                 onClick={() => { setSortOrder('latest'); fetchVideos(true); }}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 ${
                   sortOrder === 'latest'
-                    ? 'bg-neon-blue text-black shadow-[0_0_10px_rgba(0,243,255,0.4)]'
+                    ? 'bg-white/15 text-white font-bold'
                     : 'text-neutral-400 hover:text-white'
                 }`}
               >
@@ -603,7 +603,7 @@ export default function VideoGallery() {
           {!restrictionActive && sourceProvider === 'reddit' && (
             <button
               onClick={() => setShowBrowser(true)}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/80 hover:text-white text-xs font-bold transition-all border border-white/10"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/80 hover:text-white text-xs font-semibold transition-all border border-white/10"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
@@ -613,18 +613,14 @@ export default function VideoGallery() {
           )}
 
           {/* AI / RedGIFs Search Bar */}
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all duration-300 flex-1 min-w-[160px] ${
-            selectedMood?.id === 'ai' || isSearchMode
-              ? 'bg-neon-blue/10 border-neon-blue/40'
-              : 'bg-white/5 border-white/10'
-          }`}>
-            <span className="text-sm shrink-0">{sourceProvider === 'redgifs' ? '🔎' : '✨'}</span>
+          <div className="flex items-center gap-2 px-3 py-1 rounded-lg border bg-black/40 border-white/10 flex-1 min-w-[160px]">
+            <span className="text-xs shrink-0">{sourceProvider === 'redgifs' ? '🔎' : '✨'}</span>
             <input
               type="text"
               placeholder={
                 restrictionActive 
                   ? "search restricted feed..." 
-                  : (sourceProvider === 'redgifs' ? "🔎 Search RedGIFs tags, creators, terms..." : "search or vibe...")
+                  : (sourceProvider === 'redgifs' ? "Search RedGIFs tags or terms..." : "search or vibe...")
               }
               value={aiVibe}
               onChange={e => setAiVibe(e.target.value)}

@@ -856,33 +856,29 @@ export default function Admin() {
     <div className="max-w-6xl mx-auto pb-20 animate-in fade-in duration-500">
       
       {/* Header Banner */}
-      <div className="relative rounded-3xl overflow-hidden mb-8 bg-gradient-to-br from-yellow-950/20 via-black to-neutral-900/40 border border-white/10 p-8 shadow-2xl">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(250,204,21,0.1),_transparent_60%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(0,243,255,0.05),_transparent_60%)]" />
-        
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="bg-[#15171e] border border-white/10 rounded-xl p-6 mb-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-2xl drop-shadow-[0_0_8px_rgba(250,204,21,0.5)]">👑</span>
-              <span className="text-[10px] font-black tracking-widest text-yellow-500 uppercase px-2 py-0.5 rounded bg-yellow-500/10 border border-yellow-500/20">Admin Panel</span>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xl">👑</span>
+              <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">System Administration</h1>
             </div>
-            <h1 className="text-4xl font-black text-white tracking-tight">System Administration</h1>
-            <p className="text-white/40 text-xs mt-1">Manage platform users, configure access permissions, and enforce content filters.</p>
+            <p className="text-white/40 text-xs">Manage platform users, inspect activity logs, and enforce feed parameters.</p>
           </div>
 
-          {/* Quick Stats Grid */}
-          <div className="flex gap-4 shrink-0 flex-wrap sm:flex-nowrap">
-            <div className="bg-white/5 border border-white/10 rounded-2xl px-5 py-3 text-center min-w-[100px] flex-1">
-              <p className="text-2xl font-black text-white">{totalUsers}</p>
-              <p className="text-[9px] text-white/40 font-bold uppercase tracking-wider mt-0.5">Total Users</p>
+          {/* Quick Stats */}
+          <div className="flex gap-3 shrink-0 flex-wrap sm:flex-nowrap">
+            <div className="bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-center min-w-[90px] flex-1">
+              <p className="text-xl font-extrabold text-white">{totalUsers}</p>
+              <p className="text-[10px] text-white/40 font-semibold uppercase tracking-wider">Total Users</p>
             </div>
-            <div className="bg-white/5 border border-white/10 rounded-2xl px-5 py-3 text-center min-w-[100px] flex-1">
-              <p className="text-2xl font-black text-yellow-400">{adminCount}</p>
-              <p className="text-[9px] text-yellow-400/60 font-bold uppercase tracking-wider mt-0.5">Admins</p>
+            <div className="bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-center min-w-[90px] flex-1">
+              <p className="text-xl font-extrabold text-yellow-400">{adminCount}</p>
+              <p className="text-[10px] text-yellow-400/70 font-semibold uppercase tracking-wider">Admins</p>
             </div>
-            <div className="bg-white/5 border border-white/10 rounded-2xl px-5 py-3 text-center min-w-[100px] flex-1">
-              <p className="text-2xl font-black text-purple-400">{restrictedCount}</p>
-              <p className="text-[9px] text-purple-400/60 font-bold uppercase tracking-wider mt-0.5">Restricted</p>
+            <div className="bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-center min-w-[90px] flex-1">
+              <p className="text-xl font-extrabold text-purple-400">{restrictedCount}</p>
+              <p className="text-[10px] text-purple-400/70 font-semibold uppercase tracking-wider">Restricted</p>
             </div>
           </div>
         </div>
@@ -890,38 +886,38 @@ export default function Admin() {
 
       {/* Dynamic Action Messages (Toasts) */}
       {actionMsg && (
-        <div className={`fixed bottom-6 right-6 z-50 px-6 py-4 rounded-2xl border text-sm font-semibold shadow-2xl animate-in slide-in-from-bottom-5 duration-300 ${
-          actionMsg.type === 'error' ? 'bg-red-950/80 border-red-500/30 text-red-200' :
-          actionMsg.type === 'success' ? 'bg-emerald-950/80 border-emerald-500/30 text-emerald-200' :
-          'bg-black/80 border-white/10 text-white/80'
+        <div className={`fixed bottom-6 right-6 z-50 px-5 py-3 rounded-lg border text-xs font-semibold shadow-xl animate-in slide-in-from-bottom-5 duration-300 ${
+          actionMsg.type === 'error' ? 'bg-red-950 border-red-500/30 text-red-200' :
+          actionMsg.type === 'success' ? 'bg-emerald-950 border-emerald-500/30 text-emerald-200' :
+          'bg-black/90 border-white/10 text-white/80'
         }`}>
           <div className="flex items-center gap-2">
             {actionMsg.type === 'error' && <span>❌</span>}
             {actionMsg.type === 'success' && <span>✅</span>}
-            {actionMsg.type === 'info' && <span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full" />}
+            {actionMsg.type === 'info' && <span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full" />}
             <span>{actionMsg.text}</span>
           </div>
         </div>
       )}
 
       {/* Main Admin Card */}
-      <div className="glass-panel rounded-3xl overflow-hidden border border-white/10 shadow-2xl">
+      <div className="bg-[#15171e] rounded-xl overflow-hidden border border-white/10 shadow-xl">
         {/* Toolbar */}
-        <div className="p-6 border-b border-white/10 flex flex-col sm:flex-row gap-4 items-center justify-between bg-white/[0.01]">
+        <div className="p-4 border-b border-white/10 flex flex-col sm:flex-row gap-3 items-center justify-between bg-black/20">
           {/* Search Input */}
           <div className="relative w-full sm:max-w-md">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/30 text-sm">🔍</span>
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30 text-xs">🔍</span>
             <input
               type="text"
               placeholder="Search user by username or email..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-white/5 hover:bg-white/[0.08] focus:bg-white/[0.08] border border-white/10 rounded-2xl text-white text-sm placeholder-white/30 focus:outline-none focus:border-yellow-500/50 transition-all duration-300"
+              className="w-full pl-9 pr-4 py-2 bg-white/5 hover:bg-white/[0.08] focus:bg-white/[0.08] border border-white/10 rounded-lg text-white text-xs placeholder-white/30 focus:outline-none focus:border-white/30 transition-all"
             />
             {searchQuery && (
               <button 
                 onClick={() => setSearchQuery('')}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 hover:text-white text-xs"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white text-xs"
               >
                 Clear
               </button>
@@ -931,7 +927,7 @@ export default function Admin() {
           <button
             onClick={fetchUsers}
             disabled={loading}
-            className="flex items-center gap-1.5 px-5 py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 hover:text-white text-sm font-bold transition-all shrink-0 cursor-pointer disabled:opacity-50"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white/80 hover:text-white text-xs font-semibold transition-all shrink-0 cursor-pointer disabled:opacity-50"
           >
             🔄 Refresh List
           </button>
