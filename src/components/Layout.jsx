@@ -342,14 +342,14 @@ export default function Layout({ profile, isAdmin }) {
           onClick={() => setDrawerOpen(false)}
           aria-hidden="true">
           <div
-            className="absolute bottom-16 inset-x-0 bg-[#111] border-t border-white/10
-              rounded-t-2xl px-4 pt-3 pb-4 shadow-2xl
+            className="absolute bottom-[calc(4rem+env(safe-area-inset-bottom,0px))] inset-x-0 bg-[#16181e] border-t border-white/15
+              rounded-t-2xl px-4 pt-3 pb-8 shadow-2xl max-h-[75vh] overflow-y-auto no-scrollbar
               animate-in slide-in-from-bottom-2 duration-200"
             onClick={e => e.stopPropagation()}
             role="dialog"
             aria-label="More options">
             {/* drag handle */}
-            <div className="w-8 h-1 bg-white/20 rounded-full mx-auto mb-4" />
+            <div className="w-10 h-1 bg-white/30 rounded-full mx-auto mb-4" />
 
             {/* Watch Party Controls (Mobile) */}
             {status === 'idle' && (
