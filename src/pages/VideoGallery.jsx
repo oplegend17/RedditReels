@@ -613,7 +613,7 @@ export default function VideoGallery() {
           )}
 
           {/* AI / RedGIFs Search Bar */}
-          <div className="flex items-center gap-2 px-3 py-1 rounded-lg border bg-black/40 border-white/10 flex-1 min-w-[160px]">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border bg-black/40 border-white/10 w-full sm:w-auto flex-1 min-w-[140px]">
             <span className="text-xs shrink-0">{sourceProvider === 'redgifs' ? '🔎' : '✨'}</span>
             <input
               type="text"

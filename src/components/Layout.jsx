@@ -351,16 +351,37 @@ export default function Layout({ profile, isAdmin }) {
             {/* drag handle */}
             <div className="w-8 h-1 bg-white/20 rounded-full mx-auto mb-4" />
 
+            {/* Watch Party Controls (Mobile) */}
+            {status === 'idle' && (
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <button
+                  type="button"
+                  onClick={() => { setDrawerOpen(false); handleCreateHostParty(); }}
+                  className="flex items-center justify-center gap-1.5 py-3 rounded-xl bg-neon-pink text-white font-bold text-xs transition-all cursor-pointer">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+                  </svg>
+                  Host Party
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setDrawerOpen(false); setShowJoinModal(true); }}
+                  className="flex items-center justify-center gap-1.5 py-3 rounded-xl bg-white/10 text-white font-bold text-xs border border-white/15 transition-all cursor-pointer">
+                  Join Party
+                </button>
+              </div>
+            )}
+
             <div className="grid grid-cols-3 gap-2 mb-3">
               {moreItems.map(item => {
                 const active = isActive(item.path);
                 return (
                   <Link key={item.path} to={item.path}
-                    className={`flex flex-col items-center gap-2 py-4 rounded-2xl border
+                    className={`flex flex-col items-center gap-1.5 py-3.5 rounded-xl border
                       transition-all duration-150
                       ${active
                         ? 'bg-neon-pink/10 border-neon-pink/30 text-neon-pink'
-                        : 'bg-white/4 border-white/8 text-white/55 hover:text-white hover:bg-white/8'}`}
+                        : 'bg-white/5 border-white/10 text-white/60 hover:text-white hover:bg-white/10'}`}
                     aria-current={active ? 'page' : undefined}>
                     {item.icon}
                     <span className="text-xs font-semibold">{item.label}</span>
@@ -371,9 +392,9 @@ export default function Layout({ profile, isAdmin }) {
 
             <button
               onClick={() => auth.signOut()}
-              className="w-full py-3 rounded-2xl bg-white/4 border border-white/8
-                text-white/50 font-semibold text-sm hover:bg-white/8 hover:text-white
-                transition-all duration-150">
+              className="w-full py-2.5 rounded-xl bg-white/5 border border-white/10
+                text-white/60 font-semibold text-xs hover:bg-white/10 hover:text-white
+                transition-all duration-150 cursor-pointer">
               Sign out
             </button>
           </div>

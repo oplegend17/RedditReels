@@ -1106,7 +1106,8 @@ service cloud.firestore {
               <p className="text-xs mt-1">Try a different search term or add more users.</p>
             </div>
           ) : (
-            <table className="w-full text-left border-collapse">
+            <div className="overflow-x-auto no-scrollbar">
+              <table className="w-full text-left border-collapse min-w-[700px]">
               <thead>
                 <tr className="border-b border-white/5 text-[10px] font-black uppercase text-white/40 tracking-wider bg-white/[0.005]">
                   <th className="px-6 py-4">User</th>
@@ -1219,7 +1220,7 @@ service cloud.firestore {
                       </tr>
                       {isExpanded && (
                         <tr className="bg-black/20">
-                          <td colSpan="5" className="px-6 py-4">
+                          <td colSpan="6" className="px-6 py-4">
                             {renderFavoritesSection(u)}
                           </td>
                         </tr>
@@ -1229,6 +1230,7 @@ service cloud.firestore {
                 })}
               </tbody>
             </table>
+          </div>
           )}
         </div>
       </div>
