@@ -218,6 +218,27 @@ export default function Admin() {
     }
   }, [isAdmin]);
 
+  const getUserAccessTimestamp = (user) => {
+    const ts = user.lastActive || user.lastLogin || user.updatedAt || user.createdAt;
+    if (!ts) return 0;
+    if (typeof ts.toMillis === 'function') return ts.toMillis();
+    if (typeof ts.toDate === 'function') return ts.toDate().getTime();
+    if (ts instanceof Date) return ts.getTime();
+    if (typeof ts === 'number') return ts;
+    if (typeof ts === 'string') return new Date(ts).getTime() || 0;
+    return 0;
+  };
+
+  const formatAccessTime = (user) => {
+    const ms = getUserAccessTimestamp(user);
+    if (!ms) return 'Never';
+    const diffSec = Math.floor((Date.now() - ms) / 1000);
+    if (diffSec < 60) return 'Just now';
+    if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+    if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+    return new Date(ms).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
   const fetchUsers = async () => {
     setLoading(true);
     setHasPermissionError(false);
@@ -227,10 +248,11 @@ export default function Admin() {
         id: d.id,
         ...d.data()
       }));
-      // Sort users by name, putting admins first or sorting alphabetically
+      // Sort users by most recently active / accessed first
       list.sort((a, b) => {
-        if (a.role === 'admin' && b.role !== 'admin') return -1;
-        if (a.role !== 'admin' && b.role === 'admin') return 1;
+        const timeA = getUserAccessTimestamp(a);
+        const timeB = getUserAccessTimestamp(b);
+        if (timeA !== timeB) return timeB - timeA;
         return (a.username || '').localeCompare(b.username || '');
       });
       setUsers(list);
@@ -1089,6 +1111,7 @@ service cloud.firestore {
                 <tr className="border-b border-white/5 text-[10px] font-black uppercase text-white/40 tracking-wider bg-white/[0.005]">
                   <th className="px-6 py-4">User</th>
                   <th className="px-6 py-4">Email</th>
+                  <th className="px-6 py-4">Last Active</th>
                   <th className="px-6 py-4">Role</th>
                   <th className="px-6 py-4">Restrictions</th>
                   <th className="px-6 py-4 text-right">Actions</th>
@@ -1098,6 +1121,7 @@ service cloud.firestore {
                 {filteredUsers.map(u => {
                   const hasRestriction = u.restrictionType && u.restrictionType !== 'none';
                   const joinedDate = u.createdAt?.toDate ? u.createdAt.toDate().toLocaleDateString() : 'N/A';
+                  const lastActiveText = formatAccessTime(u);
                   const isExpanded = expandedUserId === u.id;
                   
                   return (
@@ -1130,6 +1154,17 @@ service cloud.firestore {
                         {/* Email */}
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-white/60 font-mono">
                           {u.email}
+                        </td>
+
+                        {/* Last Active */}
+                        <td className="px-6 py-4 whitespace-nowrap text-xs font-semibold">
+                          <span className={`px-2.5 py-1 rounded-full border text-[10px] font-bold ${
+                            lastActiveText === 'Just now' || lastActiveText.endsWith('m ago')
+                              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                              : 'bg-white/5 border-white/10 text-white/50'
+                          }`}>
+                            {lastActiveText}
+                          </span>
                         </td>
 
                         {/* Role Badges */}

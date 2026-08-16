@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { auth, db } from './lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import Auth from './components/Auth';
 import Layout from './components/Layout';
 import VideoGallery from './pages/VideoGallery';
@@ -34,8 +34,11 @@ function App() {
       setUser(currentUser);
 
       if (currentUser) {
-        // Subscribe to user profile document in Firestore
+        // Update user's lastActive timestamp
         const profileRef = doc(db, 'users', currentUser.uid);
+        setDoc(profileRef, { lastActive: new Date() }, { merge: true }).catch(() => {});
+
+        // Subscribe to user profile document in Firestore
         unsubscribeProfile = onSnapshot(profileRef, (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
