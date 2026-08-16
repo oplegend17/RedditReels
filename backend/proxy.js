@@ -1133,6 +1133,34 @@ app.get("/api/redgifs/niches", async (req, res) => {
   }
 });
 
+// Endpoint: Trending RedGIFs search tags
+app.get("/api/redgifs/tags/trending", async (req, res) => {
+  try {
+    let token = await getRedgifsAccessToken();
+    const response = await fetch("https://api.redgifs.com/v2/tags/trending", {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        'User-Agent': browserUA,
+        Accept: 'application/json',
+      },
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const tags = (data.tags || data || []).map(t => typeof t === 'string' ? t : (t.name || t.tag)).filter(Boolean);
+      if (tags.length > 0) return res.json({ tags });
+    }
+    res.json({
+      tags: ['Amateur', 'Cosplay', 'Solo Female', 'Hardcore', 'Fitness', 'Sensual', 'Asian', 'Latina', 'MILF', 'Threesome', 'Brunette', 'Blonde', 'Bikini', 'Hentai']
+    });
+  } catch (err) {
+    res.json({
+      tags: ['Amateur', 'Cosplay', 'Solo Female', 'Hardcore', 'Fitness', 'Sensual', 'Asian', 'Latina', 'MILF', 'Threesome', 'Brunette', 'Blonde', 'Bikini', 'Hentai']
+    });
+  }
+});
+
+
 // Endpoint: Fetch RedGifs media direct video stream URL
 app.get("/api/redgifs/:id", async (req, res) => {
   try {

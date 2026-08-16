@@ -52,6 +52,21 @@ export default function VideoGallery() {
   const [redgifsPage, setRedgifsPage] = useState(1);
   const [redgifsHasMore, setRedgifsHasMore] = useState(true);
   const [sortOrder, setSortOrder] = useState('trending'); // 'trending' | 'best' | 'latest'
+  const [redgifsTags, setRedgifsTags] = useState([
+    'Amateur', 'Cosplay', 'Solo Female', 'Hardcore', 'Fitness', 'Sensual', 'Asian', 'Latina', 'MILF', 'Threesome', 'Brunette', 'Blonde', 'Bikini', 'Hentai'
+  ]);
+  const [selectedRedgifsTag, setSelectedRedgifsTag] = useState(null);
+
+  useEffect(() => {
+    if (sourceProvider === 'redgifs') {
+      fetch(`${BACKEND_API_URL}/api/redgifs/tags/trending`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.tags?.length) setRedgifsTags(data.tags);
+        })
+        .catch(() => {});
+    }
+  }, [sourceProvider]);
 
   useEffect(() => {
     const fetchSubreddits = async () => {
@@ -86,19 +101,16 @@ export default function VideoGallery() {
       }
 
       const pageToFetch = isNewSubreddit ? 1 : redgifsPage;
-      const isSearch = isSearchMode || restrictionActive || !!selectedMood || usingCustomSubreddit || !!selectedSubreddit;
 
-      let effectiveQuery = 'hot';
+      let effectiveQuery = 'trending';
       if (restrictionActive) {
         effectiveQuery = searchQuery.trim() ? `${searchQuery.trim()} ${restrictionKeyword}` : restrictionKeyword;
       } else if (isSearchMode && searchQuery) {
         effectiveQuery = searchQuery.trim();
+      } else if (selectedRedgifsTag) {
+        effectiveQuery = selectedRedgifsTag;
       } else if (selectedMood) {
-        effectiveQuery = selectedMood.id === 'soft' ? 'sensual' : (selectedMood.id === 'trending' ? 'hot' : selectedMood.id);
-      } else if (usingCustomSubreddit && customSubreddit) {
-        effectiveQuery = customSubreddit.trim().replace(/^r\//i, '');
-      } else if (selectedSubreddit) {
-        effectiveQuery = selectedSubreddit.replace(/^r\//i, '');
+        effectiveQuery = selectedMood.id === 'soft' ? 'sensual' : (selectedMood.id === 'trending' ? 'trending' : selectedMood.id);
       }
 
       try {
@@ -335,7 +347,9 @@ export default function VideoGallery() {
     setVideoSizes({});
   }, [selectedSubreddit, selectedMood, usingCustomSubreddit, isSearchMode]);
 
-  const handleMoodSelect = (mood) => {    setSelectedMood(mood);
+  const handleMoodSelect = (mood) => {
+    setSelectedMood(mood);
+    setSelectedRedgifsTag(null);
     setUsingCustomSubreddit(false);
     setIsSearchMode(false);
     setSearchQuery('');
@@ -454,8 +468,8 @@ export default function VideoGallery() {
           showNav ? 'translate-y-0' : '-translate-y-[200%]'
         }`}
       >
-        {/* Mood pills — scrollable row */}
-        {!restrictionActive && (
+        {/* Mood pills — scrollable row (Reddit mode) */}
+        {!restrictionActive && sourceProvider === 'reddit' && (
           <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
             {MOODS.map(mood => (
               <button
@@ -490,12 +504,44 @@ export default function VideoGallery() {
           </div>
         )}
 
+        {/* 🏷️ RedGIFs Tags bar — scrollable row (RedGIFs mode) */}
+        {!restrictionActive && sourceProvider === 'redgifs' && (
+          <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar items-center">
+            <div className="flex items-center gap-1 bg-red-600/10 border border-red-500/30 px-3 py-1.5 rounded-full text-xs font-black text-red-400 shrink-0">
+              🏷️ RedGIFs Tags
+            </div>
+            {redgifsTags.map(tag => (
+              <button
+                key={tag}
+                onClick={() => {
+                  if (selectedRedgifsTag === tag) {
+                    setSelectedRedgifsTag(null);
+                  } else {
+                    setSelectedRedgifsTag(tag);
+                    setSelectedMood(null);
+                    setIsSearchMode(false);
+                    setSearchQuery('');
+                  }
+                  fetchVideos(true);
+                }}
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all duration-200 border cursor-pointer ${
+                  selectedRedgifsTag === tag
+                    ? 'bg-gradient-to-r from-red-600 to-neon-pink text-white border-red-500 shadow-[0_0_12px_rgba(255,47,86,0.4)] scale-105'
+                    : 'bg-black/60 text-neutral-300 border-white/10 hover:bg-white/10 hover:text-white backdrop-blur-xl'
+                }`}
+              >
+                <span>#{tag}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Browse / search bar — cohesive control strip */}
         <div className="glass-panel p-2 rounded-2xl flex flex-wrap items-center gap-2 w-full md:w-fit mx-auto">
           {/* Content Source Provider Switcher */}
           <div className="flex items-center bg-black/40 p-1 rounded-xl border border-white/10 shrink-0">
             <button
-              onClick={() => { setSourceProvider('reddit'); setVideos([]); }}
+              onClick={() => { setSourceProvider('reddit'); setSelectedRedgifsTag(null); setVideos([]); }}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 sourceProvider === 'reddit'
                   ? 'bg-neon-pink text-white shadow-[0_0_10px_rgba(255,47,86,0.4)]'
@@ -505,7 +551,7 @@ export default function VideoGallery() {
               Reddit
             </button>
             <button
-              onClick={() => { setSourceProvider('redgifs'); setVideos([]); }}
+              onClick={() => { setSourceProvider('redgifs'); setSelectedRedgifsTag(null); setVideos([]); }}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
                 sourceProvider === 'redgifs'
                   ? 'bg-gradient-to-r from-red-600 to-neon-pink text-white shadow-[0_0_10px_rgba(255,47,86,0.4)]'
@@ -516,6 +562,42 @@ export default function VideoGallery() {
               <span className="text-[9px] uppercase tracking-wider bg-white/20 px-1 rounded font-black">API</span>
             </button>
           </div>
+
+          {/* 🔥 Trending Order Switcher (RedGIFs Mode) */}
+          {sourceProvider === 'redgifs' && (
+            <div className="flex items-center bg-black/50 p-1 rounded-xl border border-white/15 shrink-0">
+              <button
+                onClick={() => { setSortOrder('trending'); fetchVideos(true); }}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                  sortOrder === 'trending'
+                    ? 'bg-gradient-to-r from-red-600 to-neon-pink text-white shadow-[0_0_10px_rgba(239,68,68,0.4)]'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                🔥 Trending
+              </button>
+              <button
+                onClick={() => { setSortOrder('best'); fetchVideos(true); }}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                  sortOrder === 'best'
+                    ? 'bg-amber-600 text-white shadow-[0_0_10px_rgba(245,158,11,0.4)]'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                🌟 Best
+              </button>
+              <button
+                onClick={() => { setSortOrder('latest'); fetchVideos(true); }}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                  sortOrder === 'latest'
+                    ? 'bg-neon-blue text-black shadow-[0_0_10px_rgba(0,243,255,0.4)]'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                ⚡ Latest
+              </button>
+            </div>
+          )}
 
           {/* Browse */}
           {!restrictionActive && sourceProvider === 'reddit' && (
@@ -530,16 +612,20 @@ export default function VideoGallery() {
             </button>
           )}
 
-          {/* AI search */}
+          {/* AI / RedGIFs Search Bar */}
           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all duration-300 flex-1 min-w-[160px] ${
-            selectedMood?.id === 'ai'
+            selectedMood?.id === 'ai' || isSearchMode
               ? 'bg-neon-blue/10 border-neon-blue/40'
               : 'bg-white/5 border-white/10'
           }`}>
-            <span className="text-sm shrink-0">✨</span>
+            <span className="text-sm shrink-0">{sourceProvider === 'redgifs' ? '🔎' : '✨'}</span>
             <input
               type="text"
-              placeholder={restrictionActive ? "search restricted feed..." : "search or vibe..."}
+              placeholder={
+                restrictionActive 
+                  ? "search restricted feed..." 
+                  : (sourceProvider === 'redgifs' ? "🔎 Search RedGIFs tags, creators, terms..." : "search or vibe...")
+              }
               value={aiVibe}
               onChange={e => setAiVibe(e.target.value)}
               onKeyDown={e => {
@@ -573,8 +659,25 @@ export default function VideoGallery() {
             </button>
           </div>
 
-          {/* Active sub + star chip */}
-          {!restrictionActive && (selectedSubreddit || usingCustomSubreddit) && (
+          {/* Active Tag Chip (RedGIFs Mode) */}
+          {sourceProvider === 'redgifs' && selectedRedgifsTag && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600/20 border border-red-500/40 text-xs font-bold text-white shrink-0 shadow-[0_0_10px_rgba(239,68,68,0.2)]">
+              <span>🏷️ #{selectedRedgifsTag}</span>
+              <button
+                onClick={() => {
+                  setSelectedRedgifsTag(null);
+                  fetchVideos(true);
+                }}
+                className="text-white/60 hover:text-white text-xs ml-1"
+                title="Clear tag"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* Active sub + star chip (Reddit Mode Only) */}
+          {!restrictionActive && sourceProvider === 'reddit' && (selectedSubreddit || usingCustomSubreddit) && (
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 text-xs font-bold">
               <span className="text-white truncate max-w-[100px] md:max-w-xs" title={usingCustomSubreddit && customSubreddit ? `r/${customSubreddit}` : `r/${selectedSubreddit}`}>
                 {usingCustomSubreddit && customSubreddit ? `r/${customSubreddit}` : `r/${selectedSubreddit}`}
@@ -594,8 +697,8 @@ export default function VideoGallery() {
             </div>
           )}
 
-          {/* Custom r/ input */}
-          {!restrictionActive && (
+          {/* Custom r/ input (Reddit Mode Only) */}
+          {!restrictionActive && sourceProvider === 'reddit' && (
             <div className="flex items-center gap-1 bg-white/5 border border-white/10 rounded-xl px-2.5 py-1">
               <input
                 type="text"
@@ -623,6 +726,14 @@ export default function VideoGallery() {
               >
                 GO
               </button>
+            </div>
+          )}
+
+          {/* RedGIFs Mode Direct API Badge */}
+          {sourceProvider === 'redgifs' && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-600/10 border border-red-500/30 text-xs font-bold text-red-400">
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              <span>RedGIFs Direct API</span>
             </div>
           )}
 
